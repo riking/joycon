@@ -1,5 +1,6 @@
 
 #include "joycon.h"
+#include <hidapi/hidapi.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -12,7 +13,7 @@ void jc_poll_stage1(joycon_state *jc) {
 	memset(packet, 0, 9);
 	packet[0] = 0x01;
 
-	int res = hid_write(jc->handle, packet, 9);
+	int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
 	if (res < 0) {
 		jc->status = JC_ST_WANT_RECONNECT;
 	}
@@ -45,7 +46,8 @@ int jc_poll_stage2(joycon_state *jc) {
 
 	while (1) {
 		int read_res;
-		read_res = hid_read_timeout(jc->handle, rbuf, 0x31, JC_READ_TIMEOUT);
+		read_res = hid_read_timeout((hid_device *)jc->hidapi_handle, rbuf, 0x31,
+		                            JC_READ_TIMEOUT);
 		if (read_res < 0) {
 			jc->status = JC_ST_WANT_RECONNECT;
 			return -1;
@@ -80,10 +82,12 @@ bool jc_getbutton(jc_button_id bid, joycon_state *jc) {
 
 bool jc_getbutton2(jc_button_id bid, joycon_state *jcl, joycon_state *jcr) {
 	int byte_num = ((bid & 0x0F00) >> 8);
-	if (byte_num == 2 || (bid == JC_BUTTON_R_ST || bid == JC_BUTTON_R_HOM)) {
+	if (byte_num == 2 || (bid == JC_BUTTON_R_STI || bid == JC_BUTTON_R_HOM ||
+	                      bid == JC_BUTTON_R_PLU)) {
 		return jc_getbutton(bid, jcr);
 	}
-	if (byte_num == 4 || (bid == JC_BUTTON_L_ST || bid == JC_BUTTON_L_CAP)) {
+	if (byte_num == 4 || (bid == JC_BUTTON_L_STI || bid == JC_BUTTON_L_CAP ||
+	                      bid == JC_BUTTON_L_MIN)) {
 		return jc_getbutton(bid, jcl);
 	}
 	return 0;
@@ -109,7 +113,7 @@ static const struct jc_button_name_map jc_button_name_map[] = {
 };
 
 const char *jc_button_name(jc_button_id bid) {
-	for (int i = 0;
+	for (size_t i = 0;
 	     i < (sizeof(jc_button_name_map) / sizeof(jc_button_name_map[0]));
 	     i++) {
 		if (jc_button_name_map[i].bid == bid) {
@@ -120,7 +124,7 @@ const char *jc_button_name(jc_button_id bid) {
 }
 
 jc_button_id jc_button_byname(char *str) {
-	for (int i = 0;
+	for (size_t i = 0;
 	     i < (sizeof(jc_button_name_map) / sizeof(jc_button_name_map[0]));
 	     i++) {
 		if (0 == strcmp(str, jc_button_name_map[i].name)) {

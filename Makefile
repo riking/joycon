@@ -1,9 +1,9 @@
 
 SRCFILES = attach_devices.c controllers.c joycon_input.c main.c
-SRCFILES += uinput_keys.c
-HEADFILES = controllers.h joycon.h
+SRCFILES += uinput_keys.c mapping.c uinput_keys.c
+HEADFILES = controllers.h joycon.h uinput_keys.h
 
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -Wmissing-prototypes
 CFLAGS += $(shell pkg-config --cflags hidapi-hidraw)
 
 LDFLAGS = -Wall -Wextra
@@ -22,6 +22,9 @@ all: jcmapper
 
 format: $(SRCS) $(HEADS)
 	clang-format -style=file -i $^
+
+clean:
+	find . -name '*.o' -delete
 
 jcmapper: $(OBJS)
 	gcc -o $@ $^ $(LDFLAGS)

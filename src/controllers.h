@@ -34,12 +34,19 @@ typedef struct cmap {
 	size_t length;
 } cmap;
 
+#define CONTROLLER_STATUS_INACTIVE 0
+#define CONTROLLER_STATUS_SETUP 1
+#define CONTROLLER_STATUS_ACTIVE 2
+#define CONTROLLER_STATUS_PERMERROR 3
+#define CONTROLLER_STATUS_DEADCON 4
+
 typedef struct controller {
+	int active;
 	joycon_state *jcl;
 	joycon_state *jcr;
 	uint8_t prev_button_state[3];
 	uint8_t prev_lstick_state[2];
-	uint8_t prev_lstick_state[2];
+	uint8_t prev_rstick_state[2];
 	cmap mapping;
 } controller_state;
 
@@ -49,6 +56,7 @@ typedef struct controller {
 extern joycon_state g_joycons[MAX_JOYCON];
 extern controller_state g_controllers[MAX_OUTCONTROL];
 
-void check_pair_controllers(void);
+extern const cmap cmap_default_two_joycons;
+extern const cmap cmap_default_one_joycon;
 
 #endif // CONTROLLERS_H

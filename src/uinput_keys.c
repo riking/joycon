@@ -1,4 +1,9 @@
+
+#include "uinput_keys.h"
+
 #include <linux/input.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct key_name {
 	int value;
@@ -6,7 +11,7 @@ struct key_name {
 };
 
 // ripped from linux/input.h and generated with regex replace
-const key_name key_names[] = {
+const struct key_name key_names[] = {
     {KEY_RESERVED, "KEY_RESERVED"},
     {KEY_ESC, "KEY_ESC"},
     {KEY_1, "KEY_1"},
@@ -303,9 +308,8 @@ const key_name key_names[] = {
     {BTN_BASE3, "BTN_BASE3"},
     {BTN_BASE4, "BTN_BASE4"},
     {BTN_BASE5, "BTN_BASE5"},
-    a{BTN_BASE6, "BTN_BASE6"},
-    b{BTN_DEAD, "BTN_DEAD"},
-    f
+    {BTN_BASE6, "BTN_BASE6"},
+    {BTN_DEAD, "BTN_DEAD"},
 
     {BTN_GAMEPAD, "BTN_GAMEPAD"},
     {BTN_A, "BTN_A"},
@@ -488,7 +492,7 @@ const key_name key_names[] = {
     {KEY_NUMERIC_POUND, "KEY_NUMERIC_POUND"},
 };
 
-const key_name abs_axis_names[] = {
+const struct key_name abs_axis_names[] = {
     {ABS_X, "ABS_X"},
     {ABS_Y, "ABS_Y"},
     {ABS_Z, "ABS_Z"},
@@ -518,7 +522,7 @@ const key_name abs_axis_names[] = {
 };
 
 const char *uinput_key_name(int key) {
-	for (int i = 0; i < sizeof(key_names) / sizeof(key_names[0]); i++) {
+	for (size_t i = 0; i < sizeof(key_names) / sizeof(key_names[0]); i++) {
 		if (key_names[i].value == key) {
 			return key_names[i].name;
 		}
@@ -527,18 +531,18 @@ const char *uinput_key_name(int key) {
 }
 
 int uinput_key_byname(char *name) {
-	for (int i = 0; i < sizeof(key_names) / sizeof(key_names[0]); i++) {
+	for (size_t i = 0; i < sizeof(key_names) / sizeof(key_names[0]); i++) {
 		if (0 == strcmp(name, key_names[i].name)) {
 			return key_names[i].value;
 		}
 	}
-	return NULL;
+	return KEY_MAX;
 }
 
 const char *uinput_axis_name(int axis) {
-	for (int i = 0; i < sizeof(abs_axis_names) / sizeof(abs_axis_names[0]);
+	for (size_t i = 0; i < sizeof(abs_axis_names) / sizeof(abs_axis_names[0]);
 	     i++) {
-		if (abs_axis_names[i].value == key) {
+		if (abs_axis_names[i].value == axis) {
 			return abs_axis_names[i].name;
 		}
 	}
@@ -546,11 +550,11 @@ const char *uinput_axis_name(int axis) {
 }
 
 int uinput_axis_byname(char *name) {
-	for (int i = 0; i < sizeof(abs_axis_names) / sizeof(abs_axis_names[0]);
+	for (size_t i = 0; i < sizeof(abs_axis_names) / sizeof(abs_axis_names[0]);
 	     i++) {
 		if (0 == strcmp(name, abs_axis_names[i].name)) {
 			return abs_axis_names[i].value;
 		}
 	}
-	return NULL;
+	return ABS_MAX;
 }

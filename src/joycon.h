@@ -2,9 +2,9 @@
 #ifndef JOYCON_H
 #define JOYCON_H
 
-#include <hidapi/hidapi.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <wchar.h>
 
 #define JOYCON_VENDOR 0x057e
 #define JOYCON_PRODUCT_L 0x2006
@@ -29,7 +29,7 @@ typedef enum jc_status {
 
 typedef struct s_joycon_state {
 	wchar_t *serial;
-	hid_device *handle;
+	void *hidapi_handle;
 	jc_side side;
 	jc_status status;
 
