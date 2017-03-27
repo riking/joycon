@@ -22,16 +22,16 @@ typedef struct cmap_entry {
 			int uinput_axis;
 		} axis;
 		struct s_cmap_hat {
-		    jc_button_id pos;
-		    jc_button_id neg;
-		    int uinput_axis;
+			jc_button_id pos;
+			jc_button_id neg;
+			int uinput_axis;
 		} hat;
 	};
 } cmap_entry;
 
 typedef struct cmap {
-    cmap_entry *ptr;
-    size_t length;
+	cmap_entry *ptr;
+	size_t length;
 } cmap;
 
 typedef struct controller {
@@ -44,7 +44,7 @@ typedef struct controller {
 } controller_state;
 
 #define MAX_JOYCON 10
-#define MAX_OUTCONTROL 4
+#define MAX_OUTCONTROL 8
 
 extern joycon_state g_joycons[MAX_JOYCON];
 extern controller_state g_controllers[MAX_OUTCONTROL];
