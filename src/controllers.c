@@ -70,7 +70,7 @@ void setup_controller(controller_state *c) {
 	printf("connecting uinput '%s'...\n", uidev.name);
 	uid.bustype = BUS_BLUETOOTH;
 	uid.vendor = JOYCON_VENDOR;
-	uid.product = JOYCON_PRODUCT_L; // uhhhh just make something up
+	uid.product = JOYCON_PRODUCT_L - 5; // uhhhh just make something up
 	uid.version = 1;
 	uidev.id = uid;
 
@@ -196,9 +196,6 @@ static int get_axis_mapping(controller_state *c, jc_side side,
 }
 
 static uint8_t calibrated_stick(stick_calibration cal, uint8_t raw) {
-	printf("cal.min=%02hhX cal.dead_min=%02hhX cal.dead_max=%02hhX "
-	       "cal.max=%02hhX   raw=%02hhX\n",
-	       cal.min, cal.dead_min, cal.dead_max, cal.max, raw);
 	if (raw <= cal.min) {
 		return 0x0;
 	} else if (raw >= cal.max) {

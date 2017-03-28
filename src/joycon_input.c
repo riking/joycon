@@ -78,6 +78,7 @@ void jc_poll_stage2(joycon_state *jc) {
 
 	memset(rbuf, 0, 0x31);
 
+	bool sent_21 = jc->outstanding_21_reports > 0;
 	while (1) {
 		int read_res;
 		read_res = hid_read_timeout((hid_device *)jc->hidapi_handle, rbuf, 0x31,
@@ -94,7 +95,7 @@ void jc_poll_stage2(joycon_state *jc) {
 				jc->outstanding_21_reports--;
 		} else if (rbuf[0] == 0x3F) {
 			// Got button update, request an update if we aren't waiting for one
-			if (jc->outstanding_21_reports == 0) {
+			if (!sent_21) {
 				uint8_t packet[9];
 				memset(packet, 0, 9);
 				packet[0] = 0x01;
@@ -105,6 +106,7 @@ void jc_poll_stage2(joycon_state *jc) {
 					return;
 				}
 				jc->outstanding_21_reports++;
+				sent_21 = true;
 			}
 			continue;
 		} else {

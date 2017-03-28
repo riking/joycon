@@ -54,6 +54,9 @@ void scan_joycons(void) {
 				} else {
 					printf("Reconnected to Joy-Con %ls\n",
 					       g_joycons[gidx].serial);
+					g_joycons[gidx].disconnected_at = 0;
+					g_joycons[gidx].outstanding_21_reports = 0;
+					hid_set_nonblocking(g_joycons[gidx].hidapi_handle, 1);
 				}
 			}
 			continue;
@@ -88,6 +91,7 @@ void scan_joycons(void) {
 			    cur_dev->path, cur_dev->serial_number, strerror(errnum));
 			continue;
 		}
+		hid_set_nonblocking(jc->hidapi_handle, 1);
 		jc->serial = wcsdup(cur_dev->serial_number);
 		jc->side = side;
 		jc->status = JC_ST_WAITING_PAIR;
