@@ -53,6 +53,8 @@ void setup_controller(controller_state *c) {
 		c->status = CONTROLLER_STATUS_TEARDOWN;
 		return;
 	}
+	ioctl(c->fd, UI_SET_ABSBIT, ABS_X);
+	ioctl(c->fd, UI_SET_ABSBIT, ABS_Y);
 
 	struct input_id uid;
 	struct uinput_user_dev uidev;
@@ -218,7 +220,9 @@ void update_controller(controller_state *c) {
 	int evi = 0;
 	memset(evs, 0, sizeof(evs));
 	if (c->jcl) {
+		bool change = false;
 		if (c->jcl->stick_v != c->prev_lstick_state[0]) {
+			change = true;
 			int mapping = get_axis_mapping(c, JC_LEFT, true);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
@@ -228,6 +232,7 @@ void update_controller(controller_state *c) {
 			}
 		}
 		if (c->jcl->stick_h != c->prev_lstick_state[1]) {
+			change = true;
 			int mapping = get_axis_mapping(c, JC_LEFT, false);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
@@ -236,12 +241,18 @@ void update_controller(controller_state *c) {
 				evi++;
 			}
 		}
+		if (change)
+			printf("Controller #%i: %16s LStick %4d %4d\n", cnum(c), "",
+			       -128 + (unsigned int)c->jcl->stick_v,
+			       -128 + (unsigned int)c->jcl->stick_h);
 		c->prev_lstick_state[0] = c->jcl->stick_v;
 		c->prev_lstick_state[1] = c->jcl->stick_h;
 	}
 	if (c->jcr) {
+		bool change = false;
 		if (c->jcr->stick_v != c->prev_rstick_state[0]) {
-			int mapping = get_axis_mapping(c, JC_LEFT, true);
+			change = true;
+			int mapping = get_axis_mapping(c, JC_RIGHT, true);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
@@ -250,7 +261,8 @@ void update_controller(controller_state *c) {
 			}
 		}
 		if (c->jcr->stick_h != c->prev_rstick_state[1]) {
-			int mapping = get_axis_mapping(c, JC_LEFT, false);
+			change = true;
+			int mapping = get_axis_mapping(c, JC_RIGHT, false);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
@@ -258,6 +270,10 @@ void update_controller(controller_state *c) {
 				evi++;
 			}
 		}
+		if (change)
+			printf("Controller #%i: RStick %4d %4d\n", cnum(c),
+			       -128 + (unsigned int)c->jcr->stick_v,
+			       -128 + (unsigned int)c->jcr->stick_h);
 		c->prev_rstick_state[0] = c->jcr->stick_v;
 		c->prev_rstick_state[1] = c->jcr->stick_h;
 	}

@@ -13,7 +13,7 @@
 #define SERIAL_LEN 18
 
 #ifndef JC_READ_TIMEOUT
-#define JC_READ_TIMEOUT 4
+#define JC_READ_TIMEOUT 2
 #endif
 
 #define JC_RECONNECT_TIME_MS 30 * 1000
@@ -35,12 +35,19 @@ typedef enum jc_status {
 } jc_status;
 
 typedef struct {
+	uint8_t _is_default;
 	uint8_t neutral;
 	uint8_t dead_down;
 	uint8_t dead_up;
 	uint8_t min;
 	uint8_t max;
 } stick_calibration;
+
+typedef struct {
+	wchar_t *serial;
+	stick_calibration vertical;
+	stick_calibration horizontal;
+} calibration_data;
 
 typedef struct s_joycon_state {
 	wchar_t *serial;
@@ -94,5 +101,8 @@ bool jc_getbutton2(jc_button_id bid, joycon_state *jcl, joycon_state *jcr);
 
 const char *jc_button_name(jc_button_id bid);
 jc_button_id jc_button_byname(char *str);
+
+calibration_data calibration_file_load(wchar_t *serial);
+int calibration_file_save(wchar_t *serial, calibration_data data);
 
 #endif // JOYCON_H

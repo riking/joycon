@@ -16,9 +16,6 @@ static void jc_comm_error(joycon_state *jc) {
 }
 
 void jc_poll_stage1(joycon_state *jc) {
-	if (jc->outstanding_21_reports > 1) {
-		return;
-	}
 	if (!jc->hidapi_handle) {
 		if (jc->disconnected_at + JC_RECONNECT_TIME_MS < time(NULL)) {
 			// Reconnect timed out
@@ -35,6 +32,21 @@ void jc_poll_stage1(joycon_state *jc) {
 			}
 		}
 		return;
+	}
+
+	// When syncing, we don't need to poll to get stick updates.
+	// We can just wait for the button push packets.
+	if (jc->status == JC_ST_ACTIVE && jc->outstanding_21_reports == 0) {
+		uint8_t packet[9];
+		memset(packet, 0, 9);
+		packet[0] = 0x01;
+
+		int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
+		if (res < 0) {
+			jc_comm_error(jc);
+			return;
+		}
+		jc->outstanding_21_reports++;
 	}
 }
 
@@ -77,18 +89,22 @@ void jc_poll_stage2(joycon_state *jc) {
 			return;
 		}
 		if (rbuf[0] == 0x21) {
-			jc->outstanding_21_reports--;
 			jc_fill(jc, rbuf + 1);
-			return;
+			if (jc->outstanding_21_reports > 0)
+				jc->outstanding_21_reports--;
 		} else if (rbuf[0] == 0x3F) {
-			uint8_t packet[9];
-			memset(packet, 0, 9);
-			packet[0] = 0x01;
+			// Got button update, request an update if we aren't waiting for one
+			if (jc->outstanding_21_reports == 0) {
+				uint8_t packet[9];
+				memset(packet, 0, 9);
+				packet[0] = 0x01;
 
-			int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
-			if (res < 0) {
-				jc_comm_error(jc);
-				return;
+				int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
+				if (res < 0) {
+					jc_comm_error(jc);
+					return;
+				}
+				jc->outstanding_21_reports++;
 			}
 			continue;
 		} else {

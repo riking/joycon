@@ -6,19 +6,17 @@
 #include <stdio.h>
 #include <time.h>
 
-static int tick;
-
-static int ticks_with_unpaired;
+static int scan_tick;
 
 static void mainloop(void) {
 
 	// Attach new devices
-	if (tick == 0) {
+	if (scan_tick == 0) {
 		scan_joycons();
 	}
-	tick++;
-	if (tick == 60)
-		tick = 0;
+	scan_tick++;
+	if (scan_tick == 60)
+		scan_tick = 0;
 
 	// Poll for input
 	for (int i = 0; i < MAX_JOYCON; i++) {
@@ -32,24 +30,16 @@ static void mainloop(void) {
 			jc_poll_stage2(&g_joycons[i]);
 		}
 	}
-	// Pair new controllers
-	bool any_unpaired = false;
+	// Pair new controllers, perform calibration
 	for (int i = 0; i < MAX_JOYCON; i++) {
 		if (g_joycons[i].status == JC_ST_WAITING_PAIR) {
 			attempt_pairing(&g_joycons[i]);
 		}
-		if (g_joycons[i].status == JC_ST_WAITING_PAIR) {
-			any_unpaired = true;
+	}
+	// Calibration
+	for (int i = 0; i < MAX_JOYCON; i++) {
+		if (g_joycons[i].status == JC_ST_CALIBRATING) {
 		}
-	}
-	if (any_unpaired) {
-		ticks_with_unpaired++;
-	} else {
-		ticks_with_unpaired = 0;
-	}
-	if (ticks_with_unpaired > 60 * 3) {
-		printf("\nPress L and R on the controller to set up the Joy-Con\n");
-		ticks_with_unpaired = 60 * -60;
 	}
 	// Update controllers
 	for (int i = 0; i < MAX_OUTCONTROL; i++) {
@@ -88,27 +78,36 @@ static int timespec_subtract(struct timespec *result, struct timespec *x,
 }
 
 void setup_controller(controller_state *c);
-void destroy_controller(controller_state *c) ;
+void destroy_controller(controller_state *c);
 
 int main(void) {
 	struct timespec sleep_target;
 	struct timespec cycle_end;
 	struct timespec remaining;
 
-/*
-	g_controllers[0].mapping = cmap_default_one_joycon;
-	setup_controller(&g_controllers[0]);
+	/*
+	    g_controllers[0].mapping = cmap_default_one_joycon;
+	    g_controllers[0].mapping = cmap_default_two_joycons;
+	    setup_controller(&g_controllers[0]);
 
-	sleep(10);
+	    sleep(10);
 
-	destroy_controller(&g_controllers[0]);
-	*/
+	    destroy_controller(&g_controllers[0]);
+	    */
+
+	printf("Joy-Con Mapper (c) 2017 Kane York\n");
+	printf(
+	    "Connect your Joycons through the system bluetooth to get started.\n");
+	printf("Once connected:\n");
+	printf("  Press down on the stick to begin calibration\n");
+	printf("  Press L and R at the same time to create controller\n");
+	printf("\n");
 
 	while (1) {
 		// Compute now + 1/60 second
 		clock_gettime(CLOCK_MONOTONIC, &sleep_target);
 		uint64_t nsec = sleep_target.tv_nsec;
-		nsec += 16.60 * (BILLION / 1000LL);
+		nsec += 24 * (BILLION / 1000LL);
 		if (nsec > BILLION) {
 			sleep_target.tv_nsec = nsec - BILLION;
 			sleep_target.tv_sec += 1;
