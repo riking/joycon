@@ -36,10 +36,9 @@ typedef enum jc_status {
 
 typedef struct {
 	uint8_t _is_default;
-	uint8_t neutral;
-	uint8_t dead_down;
-	uint8_t dead_up;
 	uint8_t min;
+	uint8_t dead_min;
+	uint8_t dead_max;
 	uint8_t max;
 } stick_calibration;
 

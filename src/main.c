@@ -107,7 +107,7 @@ int main(void) {
 		// Compute now + 1/60 second
 		clock_gettime(CLOCK_MONOTONIC, &sleep_target);
 		uint64_t nsec = sleep_target.tv_nsec;
-		nsec += 24 * (BILLION / 1000LL);
+		nsec += 30 * (BILLION / 1000LL);
 		if (nsec > BILLION) {
 			sleep_target.tv_nsec = nsec - BILLION;
 			sleep_target.tv_sec += 1;

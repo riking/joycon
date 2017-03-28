@@ -93,7 +93,12 @@ void scan_joycons(void) {
 		jc->status = JC_ST_WAITING_PAIR;
 
 		// Try to find stick calibration data
-		// TODO
+		calibration_data data = calibration_file_load(jc->serial);
+		jc->calib_v = data.vertical;
+		jc->calib_h = data.horizontal;
+		if (jc->calib_v._is_default || jc->calib_h._is_default) {
+			printf("[!] Joy-Con #%i needs calibration!\n", gidx);
+		}
 	}
 	hid_free_enumeration(devs);
 }

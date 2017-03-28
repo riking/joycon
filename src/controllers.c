@@ -195,6 +195,30 @@ static int get_axis_mapping(controller_state *c, jc_side side,
 	return ABS_MAX;
 }
 
+static uint8_t calibrated_stick(stick_calibration cal, uint8_t raw) {
+	printf("cal.min=%02hhX cal.dead_min=%02hhX cal.dead_max=%02hhX "
+	       "cal.max=%02hhX   raw=%02hhX\n",
+	       cal.min, cal.dead_min, cal.dead_max, cal.max, raw);
+	if (raw <= cal.min) {
+		return 0x0;
+	} else if (raw >= cal.max) {
+		return 0xFF;
+	} else if (raw <= cal.dead_max && raw >= cal.dead_min) {
+		return 0x80;
+	} else if (raw <= cal.dead_min) {
+		uint8_t raw_range = cal.dead_min - cal.min;
+		uint8_t scaled_range = 0x70 - 0x00;
+		return ((raw - cal.min) * scaled_range) / raw_range + 0x0;
+	} else if (raw >= cal.dead_max) {
+		uint8_t raw_range = cal.max - cal.dead_max;
+		uint8_t scaled_range = 0xFF - 0x90;
+		return ((raw - cal.dead_max) * scaled_range) / raw_range + 0x90;
+	} else {
+		printf("FATAL: Bad calibration data\n");
+		abort();
+	}
+}
+
 void update_controller(controller_state *c) {
 	if ((c->jcl && c->jcl->hidapi_handle == NULL) ||
 	    (c->jcr && c->jcr->hidapi_handle == NULL)) {
@@ -227,7 +251,8 @@ void update_controller(controller_state *c) {
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
-				evs[evi].value = c->jcl->stick_v;
+				evs[evi].value =
+				    calibrated_stick(c->jcl->calib_v, c->jcl->stick_v);
 				evi++;
 			}
 		}
@@ -237,7 +262,8 @@ void update_controller(controller_state *c) {
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
-				evs[evi].value = c->jcl->stick_h;
+				evs[evi].value =
+				    calibrated_stick(c->jcl->calib_h, c->jcl->stick_h);
 				evi++;
 			}
 		}
@@ -256,7 +282,8 @@ void update_controller(controller_state *c) {
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
-				evs[evi].value = c->jcr->stick_v;
+				evs[evi].value =
+				    calibrated_stick(c->jcr->calib_v, c->jcr->stick_v);
 				evi++;
 			}
 		}
@@ -266,7 +293,8 @@ void update_controller(controller_state *c) {
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
-				evs[evi].value = c->jcr->stick_h;
+				evs[evi].value =
+				    calibrated_stick(c->jcr->calib_h, c->jcr->stick_h);
 				evi++;
 			}
 		}
