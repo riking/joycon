@@ -1,6 +1,6 @@
 
 SRCFILES = attach_devices.c controllers.c joycon_input.c main.c
-SRCFILES += uinput_keys.c mapping.c uinput_keys.c calibration.c
+SRCFILES += uinput_keys.c mapping.c uinput_keys.c calibration.c crc.c
 HEADFILES = controllers.h joycon.h uinput_keys.h
 
 CFLAGS = -Wall -Wextra -Wmissing-prototypes

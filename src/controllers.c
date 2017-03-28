@@ -241,30 +241,32 @@ void update_controller(controller_state *c) {
 	int evi = 0;
 	memset(evs, 0, sizeof(evs));
 	if (c->jcl) {
-		bool change = false;
+		bool nonzero = false;
 		if (c->jcl->stick_v != c->prev_lstick_state[0]) {
-			change = true;
 			int mapping = get_axis_mapping(c, JC_LEFT, true);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcl->calib_v, c->jcl->stick_v);
+				if (evs[evi].value != 0x80)
+					nonzero = true;
 				evi++;
 			}
 		}
 		if (c->jcl->stick_h != c->prev_lstick_state[1]) {
-			change = true;
 			int mapping = get_axis_mapping(c, JC_LEFT, false);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcl->calib_h, c->jcl->stick_h);
+				if (evs[evi].value != 0x80)
+					nonzero = true;
 				evi++;
 			}
 		}
-		if (change)
+		if (nonzero)
 			printf("Controller #%i: %16s LStick %4d %4d\n", cnum(c), "",
 			       -128 + (unsigned int)c->jcl->stick_v,
 			       -128 + (unsigned int)c->jcl->stick_h);
@@ -272,30 +274,32 @@ void update_controller(controller_state *c) {
 		c->prev_lstick_state[1] = c->jcl->stick_h;
 	}
 	if (c->jcr) {
-		bool change = false;
+		bool nonzero = false;
 		if (c->jcr->stick_v != c->prev_rstick_state[0]) {
-			change = true;
 			int mapping = get_axis_mapping(c, JC_RIGHT, true);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcr->calib_v, c->jcr->stick_v);
+				if (evs[evi].value != 0x80)
+					nonzero = true;
 				evi++;
 			}
 		}
 		if (c->jcr->stick_h != c->prev_rstick_state[1]) {
-			change = true;
 			int mapping = get_axis_mapping(c, JC_RIGHT, false);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcr->calib_h, c->jcr->stick_h);
+				if (evs[evi].value != 0x80)
+					nonzero = true;
 				evi++;
 			}
 		}
-		if (change)
+		if (nonzero)
 			printf("Controller #%i: RStick %4d %4d\n", cnum(c),
 			       -128 + (unsigned int)c->jcr->stick_v,
 			       -128 + (unsigned int)c->jcr->stick_h);

@@ -104,4 +104,6 @@ jc_button_id jc_button_byname(char *str);
 calibration_data calibration_file_load(wchar_t *serial);
 int calibration_file_save(wchar_t *serial, calibration_data data);
 
+uint8_t crc_7_bytes(uint8_t *ptr);
+
 #endif // JOYCON_H
