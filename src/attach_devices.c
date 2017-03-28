@@ -66,7 +66,7 @@ void scan_joycons(void) {
 				break;
 			}
 		}
-		if (gidx == 10) {
+		if (gidx == MAX_JOYCON) {
 			printf("Error: Too many Joy-Cons connected via Bluetooth. Cannot "
 			       "connect more.\n");
 			continue;

@@ -37,3 +37,14 @@ calibration_data calibration_file_load(wchar_t *serial) {
 	    (stick_calibration){1, 0x80 + -50, 0x80 + -15, 0x80 + 15, 0x80 + 50};
 	return data;
 }
+
+static joycon_state *calib_current;
+
+// Calibration sequence:
+//  - Leave Neutral
+//  - Slowly Tilt, Release
+//     Each direction, 3 times
+//  - Make Circles
+static int calib_phase;
+
+void tick_calibration(joycon_state *jc) {}

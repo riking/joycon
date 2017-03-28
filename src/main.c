@@ -39,6 +39,7 @@ static void mainloop(void) {
 	// Calibration
 	for (int i = 0; i < MAX_JOYCON; i++) {
 		if (g_joycons[i].status == JC_ST_CALIBRATING) {
+			tick_calibration(&g_joycons[i]);
 		}
 	}
 	// Update controllers

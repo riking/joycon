@@ -180,6 +180,8 @@ void handle_input(t_joycon *jc, uint8_t *buf65, int len) {
 		//   Bit 6: JL L
 		//   Bit 7: JL ZL
 		// Byte 3
+		//   Bit 0: Minus
+		//   Bit 1: Plus
 		//   Bit 2: RStick
 		//   Bit 3: LStick
 		//   Bit 4: Home
