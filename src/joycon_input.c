@@ -36,17 +36,6 @@ void jc_poll_stage1(joycon_state *jc) {
 		}
 		return;
 	}
-
-	uint8_t packet[9];
-	memset(packet, 0, 9);
-	packet[0] = 0x01;
-
-	int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
-	if (res < 0) {
-		jc_comm_error(jc);
-		return;
-	}
-	jc->outstanding_21_reports++;
 }
 
 static int jc_fill(joycon_state *jc, uint8_t *packet) {
@@ -92,7 +81,15 @@ void jc_poll_stage2(joycon_state *jc) {
 			jc_fill(jc, rbuf + 1);
 			return;
 		} else if (rbuf[0] == 0x3F) {
-			// Ignore 0x3F packets
+			uint8_t packet[9];
+			memset(packet, 0, 9);
+			packet[0] = 0x01;
+
+			int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
+			if (res < 0) {
+				jc_comm_error(jc);
+				return;
+			}
 			continue;
 		} else {
 			dprintf(2, "WARNING: Joycon %ls sent HID packet %02X\n", jc->serial,

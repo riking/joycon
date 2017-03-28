@@ -7,42 +7,42 @@ static cmap_entry default_two_joycons[] = {
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_A, .uinput_button = BTN_0,
+             .joycon_button = JC_BUTTON_R_A, .uinput_button = BTN_EAST,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_X, .uinput_button = BTN_1,
+             .joycon_button = JC_BUTTON_R_X, .uinput_button = BTN_NORTH,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_B, .uinput_button = BTN_2,
+             .joycon_button = JC_BUTTON_R_B, .uinput_button = BTN_SOUTH,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_Y, .uinput_button = BTN_3,
+             .joycon_button = JC_BUTTON_R_Y, .uinput_button = BTN_WEST,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DL, .uinput_button = BTN_4,
+             .joycon_button = JC_BUTTON_L_DL, .uinput_button = BTN_DPAD_LEFT,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DD, .uinput_button = BTN_5,
+             .joycon_button = JC_BUTTON_L_DD, .uinput_button = BTN_DPAD_DOWN,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DU, .uinput_button = BTN_6,
+             .joycon_button = JC_BUTTON_L_DU, .uinput_button = BTN_DPAD_UP,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DR, .uinput_button = BTN_7,
+             .joycon_button = JC_BUTTON_L_DR, .uinput_button = BTN_DPAD_RIGHT,
          }},
     /* shoulder */
     {.type = CONTROLLER_MAP_BUTTON,
@@ -80,12 +80,12 @@ static cmap_entry default_two_joycons[] = {
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_HOM, .uinput_button = BTN_GAMEPAD,
+             .joycon_button = JC_BUTTON_R_HOM, .uinput_button = BTN_MODE,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_CAP, .uinput_button = BTN_MODE,
+             .joycon_button = JC_BUTTON_L_CAP, .uinput_button = KEY_SCREEN,
          }},
     /* sticks */
     {.type = CONTROLLER_MAP_BUTTON,
@@ -101,12 +101,12 @@ static cmap_entry default_two_joycons[] = {
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_THROTTLE,
+             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_X,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_RUDDER,
+             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_Y,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
@@ -126,43 +126,43 @@ static cmap_entry default_one_joycon[] = {
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DL, .uinput_button = BTN_0,
+             .joycon_button = JC_BUTTON_L_DL, .uinput_button = BTN_SOUTH,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DD, .uinput_button = BTN_1,
+             .joycon_button = JC_BUTTON_L_DD, .uinput_button = BTN_EAST,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DU, .uinput_button = BTN_2,
+             .joycon_button = JC_BUTTON_L_DU, .uinput_button = BTN_WEST,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_DR, .uinput_button = BTN_3,
+             .joycon_button = JC_BUTTON_L_DR, .uinput_button = BTN_NORTH,
          }},
     /* abxy right */
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_A, .uinput_button = BTN_0,
+             .joycon_button = JC_BUTTON_R_A, .uinput_button = BTN_SOUTH,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_X, .uinput_button = BTN_1,
+             .joycon_button = JC_BUTTON_R_X, .uinput_button = BTN_EAST,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_B, .uinput_button = BTN_2,
+             .joycon_button = JC_BUTTON_R_B, .uinput_button = BTN_WEST,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_Y, .uinput_button = BTN_3,
+             .joycon_button = JC_BUTTON_R_Y, .uinput_button = BTN_NORTH,
          }},
     /* sl/sr */
     {.type = CONTROLLER_MAP_BUTTON,
@@ -189,22 +189,22 @@ static cmap_entry default_one_joycon[] = {
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_L, .uinput_button = BTN_4,
+             .joycon_button = JC_BUTTON_L_L, .uinput_button = BTN_C,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_R, .uinput_button = BTN_4,
+             .joycon_button = JC_BUTTON_R_R, .uinput_button = BTN_C,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_ZL, .uinput_button = BTN_5,
+             .joycon_button = JC_BUTTON_L_ZL, .uinput_button = BTN_Z,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_ZR, .uinput_button = BTN_5,
+             .joycon_button = JC_BUTTON_R_ZR, .uinput_button = BTN_Z,
          }},
     /* plus & minus */
     {.type = CONTROLLER_MAP_BUTTON,
@@ -221,12 +221,12 @@ static cmap_entry default_one_joycon[] = {
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_R_HOM, .uinput_button = BTN_GAMEPAD,
+             .joycon_button = JC_BUTTON_R_HOM, .uinput_button = BTN_MODE,
          }},
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_CAP, .uinput_button = BTN_GAMEPAD,
+             .joycon_button = JC_BUTTON_L_CAP, .uinput_button = BTN_MODE,
          }},
     /* sticks */
     {.type = CONTROLLER_MAP_BUTTON,
@@ -243,22 +243,22 @@ static cmap_entry default_one_joycon[] = {
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_RX,
+             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_X,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_RY,
+             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_Y,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_RIGHT, .is_vertical = true, .uinput_axis = ABS_RX,
+             .side = JC_RIGHT, .is_vertical = true, .uinput_axis = ABS_X,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_RIGHT, .is_vertical = false, .uinput_axis = ABS_RY,
+             .side = JC_RIGHT, .is_vertical = false, .uinput_axis = ABS_Y,
          }},
     {.type = CONTROLLER_MAP_EOF}};
 

@@ -1,6 +1,7 @@
 
 #include "controllers.h"
 #include "joycon.h"
+#include "uinput_keys.h"
 
 #include <linux/input.h>
 #include <linux/uinput.h>
@@ -53,6 +54,7 @@ void setup_controller(controller_state *c) {
 		return;
 	}
 
+	struct input_id uid;
 	struct uinput_user_dev uidev;
 	memset(&uidev, 0, sizeof(uidev));
 
@@ -63,17 +65,18 @@ void setup_controller(controller_state *c) {
 	} else {
 		snprintf(uidev.name, UINPUT_MAX_NAME_SIZE, "Joy-Con R #%i", cnum(c));
 	}
-	uidev.id.bustype = BUS_VIRTUAL;
-	uidev.id.vendor = JOYCON_VENDOR;
-	uidev.id.product = 0x1FF8; // uhhhh just make something up
-	uidev.id.version = 1;
+	printf("connecting uinput '%s'...\n", uidev.name);
+	uid.bustype = BUS_BLUETOOTH;
+	uid.vendor = JOYCON_VENDOR;
+	uid.product = JOYCON_PRODUCT_L; // uhhhh just make something up
+	uid.version = 1;
+	uidev.id = uid;
 
 	// note: because of this, need to re-init controller whenever config changes
 	for (size_t i = 0; i < c->mapping.length; i++) {
 		if (c->mapping.ptr[i].type == CONTROLLER_MAP_AXIS) {
 			int axis = c->mapping.ptr[i].axis.uinput_axis;
-			ret = ioctl(c->fd, UI_SET_ABSBIT, axis);
-			if (ret < 0) {
+			if (ioctl(c->fd, UI_SET_ABSBIT, axis) < 0) {
 				printf("Error starting controller %i: uinput error: %s\n",
 				       cnum(c), strerror(errno));
 				c->status = CONTROLLER_STATUS_TEARDOWN;
@@ -81,6 +84,17 @@ void setup_controller(controller_state *c) {
 			}
 			uidev.absmin[axis] = 0;
 			uidev.absmax[axis] = 0xFF;
+			uidev.absflat[axis] = 3;
+		} else if (c->mapping.ptr[i].type == CONTROLLER_MAP_BUTTON) {
+			int btn = c->mapping.ptr[i].button.uinput_button;
+			if (ioctl(c->fd, UI_SET_KEYBIT, btn) < 0) {
+				printf("Error starting controller %i: %ld %d %s: uinput error: "
+				       "%s\n",
+				       cnum(c), UI_SET_KEYBIT, btn, uinput_key_name(btn),
+				       strerror(errno));
+				c->status = CONTROLLER_STATUS_TEARDOWN;
+				return;
+			}
 		}
 	}
 
@@ -151,15 +165,32 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 		}
 	}
 	if (evi > 0) {
-	    write(c->fd, ev, sizeof(ev[0]) * evi);
+		if (write(c->fd, ev, sizeof(ev[0]) * evi) < 0) {
+			printf("Write error: %s", strerror(errno));
+		}
 	}
 }
 
 static void joycon_died(controller_state *c) {
 	c->status = CONTROLLER_STATUS_DEADCON;
+	uint8_t buttons[3];
+	memset(buttons, 0, sizeof(buttons));
+	dispatch_buttons(c, buttons, c->prev_button_state);
 	memset(c->prev_button_state, 0, sizeof(c->prev_button_state));
 	memset(c->prev_lstick_state, 0, sizeof(c->prev_lstick_state));
 	memset(c->prev_rstick_state, 0, sizeof(c->prev_rstick_state));
+}
+
+static int get_axis_mapping(controller_state *c, jc_side side,
+                            bool is_vertical) {
+	for (size_t q = 0; q < c->mapping.length; q++) {
+		if (c->mapping.ptr[q].type == CONTROLLER_MAP_AXIS &&
+		    c->mapping.ptr[q].axis.side == side &&
+		    c->mapping.ptr[q].axis.is_vertical == is_vertical) {
+			return c->mapping.ptr[q].axis.uinput_axis;
+		}
+	}
+	return ABS_MAX;
 }
 
 void update_controller(controller_state *c) {
@@ -170,29 +201,78 @@ void update_controller(controller_state *c) {
 	}
 
 	uint8_t buttons[3];
-	uint8_t lstick[2];
-	uint8_t rstick[2];
 	memset(buttons, 0, sizeof(buttons));
-	memset(lstick, 0, sizeof(lstick));
-	memset(rstick, 0, sizeof(rstick));
 	if (c->jcl) {
 		buttons[0] |= c->jcl->buttons[0];
 		buttons[1] |= c->jcl->buttons[1];
 		buttons[2] |= c->jcl->buttons[2];
-		lstick[0] = c->jcl->stick_v;
-		lstick[1] = c->jcl->stick_h;
 	}
 	if (c->jcr) {
 		buttons[0] |= c->jcr->buttons[0];
 		buttons[1] |= c->jcr->buttons[1];
 		buttons[2] |= c->jcr->buttons[2];
-		rstick[0] = c->jcr->stick_v;
-		rstick[1] = c->jcr->stick_h;
 	}
 	dispatch_buttons(c, buttons, c->prev_button_state);
-	c->prev_button_state[0] = buttons[0];
-	c->prev_button_state[1] = buttons[1];
-	c->prev_button_state[2] = buttons[2];
+	memcpy(c->prev_button_state, buttons, 3);
+	struct input_event evs[4];
+	int evi = 0;
+	memset(evs, 0, sizeof(evs));
+	if (c->jcl) {
+		if (c->jcl->stick_v != c->prev_lstick_state[0]) {
+			int mapping = get_axis_mapping(c, JC_LEFT, true);
+			if (mapping != ABS_MAX) {
+				evs[evi].type = EV_ABS;
+				evs[evi].code = mapping;
+				evs[evi].value = c->jcl->stick_v;
+				evi++;
+			}
+		}
+		if (c->jcl->stick_h != c->prev_lstick_state[1]) {
+			int mapping = get_axis_mapping(c, JC_LEFT, false);
+			if (mapping != ABS_MAX) {
+				evs[evi].type = EV_ABS;
+				evs[evi].code = mapping;
+				evs[evi].value = c->jcl->stick_h;
+				evi++;
+			}
+		}
+		c->prev_lstick_state[0] = c->jcl->stick_v;
+		c->prev_lstick_state[1] = c->jcl->stick_h;
+	}
+	if (c->jcr) {
+		if (c->jcr->stick_v != c->prev_rstick_state[0]) {
+			int mapping = get_axis_mapping(c, JC_LEFT, true);
+			if (mapping != ABS_MAX) {
+				evs[evi].type = EV_ABS;
+				evs[evi].code = mapping;
+				evs[evi].value = c->jcr->stick_v;
+				evi++;
+			}
+		}
+		if (c->jcr->stick_h != c->prev_rstick_state[1]) {
+			int mapping = get_axis_mapping(c, JC_LEFT, false);
+			if (mapping != ABS_MAX) {
+				evs[evi].type = EV_ABS;
+				evs[evi].code = mapping;
+				evs[evi].value = c->jcr->stick_h;
+				evi++;
+			}
+		}
+		c->prev_rstick_state[0] = c->jcr->stick_v;
+		c->prev_rstick_state[1] = c->jcr->stick_h;
+	}
+	if (evi > 0) {
+		if (write(c->fd, evs, sizeof(evs[0]) * evi) < 0) {
+			perror("write uinput");
+		}
+	}
+	memset(evs, 0, sizeof(struct input_event));
+	evs[0].type = EV_SYN;
+	evs[0].code = SYN_REPORT;
+	evs[0].value = 0;
+	if (write(c->fd, &evs[0], sizeof(evs[0])) < 0) {
+		perror("write uinput");
+	}
 }
 
 void tick_controller(controller_state *c) {

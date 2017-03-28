@@ -51,6 +51,9 @@ void scan_joycons(void) {
 					printf("Error: Could not open device serial=%ls: %s\n",
 					       cur_dev->serial_number,
 					       errno == 0 ? "Unknown error" : strerror(errno));
+				} else {
+					printf("Reconnected to Joy-Con %ls\n",
+					       g_joycons[gidx].serial);
 				}
 			}
 			continue;

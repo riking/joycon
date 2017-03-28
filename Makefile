@@ -32,5 +32,5 @@ jcmapper: $(OBJS)
 jcreader: devinput/hidapi_demo.c
 	gcc -o $@ devinput/hidapi_demo.c $(shell pkg-config --libs hidapi-hidraw) -fsanitize=address -g
 
-%.o: %.c
-	gcc -c -o $@ $^ $(CFLAGS)
+%.o: %.c $(HEADS)
+	gcc -c -o $@ $< $(CFLAGS)

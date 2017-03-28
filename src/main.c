@@ -8,6 +8,8 @@
 
 static int tick;
 
+static int ticks_with_unpaired;
+
 static void mainloop(void) {
 
 	// Attach new devices
@@ -31,10 +33,23 @@ static void mainloop(void) {
 		}
 	}
 	// Pair new controllers
+	bool any_unpaired = false;
 	for (int i = 0; i < MAX_JOYCON; i++) {
 		if (g_joycons[i].status == JC_ST_WAITING_PAIR) {
 			attempt_pairing(&g_joycons[i]);
 		}
+		if (g_joycons[i].status == JC_ST_WAITING_PAIR) {
+			any_unpaired = true;
+		}
+	}
+	if (any_unpaired) {
+		ticks_with_unpaired++;
+	} else {
+		ticks_with_unpaired = 0;
+	}
+	if (ticks_with_unpaired > 60 * 3) {
+		printf("\nPress L and R on the controller to set up the Joy-Con\n");
+		ticks_with_unpaired = 60 * -60;
 	}
 	// Update controllers
 	for (int i = 0; i < MAX_OUTCONTROL; i++) {
@@ -72,10 +87,22 @@ static int timespec_subtract(struct timespec *result, struct timespec *x,
 	return x->tv_sec < y->tv_sec;
 }
 
+void setup_controller(controller_state *c);
+void destroy_controller(controller_state *c) ;
+
 int main(void) {
 	struct timespec sleep_target;
 	struct timespec cycle_end;
 	struct timespec remaining;
+
+/*
+	g_controllers[0].mapping = cmap_default_one_joycon;
+	setup_controller(&g_controllers[0]);
+
+	sleep(10);
+
+	destroy_controller(&g_controllers[0]);
+	*/
 
 	while (1) {
 		// Compute now + 1/60 second
