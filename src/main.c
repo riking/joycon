@@ -9,29 +9,39 @@
 static int tick;
 
 static void mainloop(void) {
+
 	// Attach new devices
-	if (tick % 60 == 0) {
+	if (tick == 0) {
 		scan_joycons();
 	}
 	tick++;
+	if (tick == 60)
+		tick = 0;
 
 	// Poll for input
 	for (int i = 0; i < MAX_JOYCON; i++) {
-		if (g_joycons[i].status == JC_ST_WAITING_PAIR ||
-		    g_joycons[i].status == JC_ST_CALIBRATING ||
-		    g_joycons[i].status == JC_ST_ACTIVE) {
+		if (g_joycons[i].status != 0) {
 			jc_poll_stage1(&g_joycons[i]);
 		}
 	}
+	// Receive input
 	for (int i = 0; i < MAX_JOYCON; i++) {
-		if (g_joycons[i].status == JC_ST_WAITING_PAIR ||
-		    g_joycons[i].status == JC_ST_CALIBRATING ||
-		    g_joycons[i].status == JC_ST_ACTIVE) {
+		if (g_joycons[i].status != 0) {
 			jc_poll_stage2(&g_joycons[i]);
 		}
 	}
-
-	controller_pairing_check();
+	// Pair new controllers
+	for (int i = 0; i < MAX_JOYCON; i++) {
+		if (g_joycons[i].status == JC_ST_WAITING_PAIR) {
+			attempt_pairing(&g_joycons[i]);
+		}
+	}
+	// Update controllers
+	for (int i = 0; i < MAX_OUTCONTROL; i++) {
+		if (g_controllers[i].status != 0) {
+			tick_controller(&g_controllers[i]);
+		}
+	}
 }
 
 #define BILLION 1000000000
@@ -62,7 +72,7 @@ static int timespec_subtract(struct timespec *result, struct timespec *x,
 	return x->tv_sec < y->tv_sec;
 }
 
-int main(int argc, char *argv[]) {
+int main(void) {
 	struct timespec sleep_target;
 	struct timespec cycle_end;
 	struct timespec remaining;
@@ -78,9 +88,10 @@ int main(int argc, char *argv[]) {
 		} else {
 			sleep_target.tv_nsec = nsec;
 		}
-		printf("Will poll %ld\n", sleep_target.tv_nsec);
 		// Run program
+		// pthread_mutex_lock();
 		mainloop();
+		// pthread_mutex_unlock();
 		// Sleep until 15ms elapsed
 		while (1) {
 			clock_gettime(CLOCK_MONOTONIC, &cycle_end);

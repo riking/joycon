@@ -29,14 +29,14 @@ void scan_joycons(void) {
 		bool found = false;
 		for (gidx = 0; gidx < MAX_JOYCON; gidx++) {
 			if (g_joycons[gidx].serial != NULL &&
-			    wcscmp(g_joycons[gidx].serial, cur_dev->serial_number)) {
+			    0 == wcscmp(g_joycons[gidx].serial, cur_dev->serial_number)) {
 				found = true;
 				break;
 			}
 		}
 		if (found) {
 			// Already connected
-			if (g_joycons[gidx].status == JC_ST_WANT_RECONNECT) {
+			if (g_joycons[gidx].hidapi_handle == NULL) {
 				// Reconnect
 				errno = 0;
 				g_joycons[gidx].hidapi_handle = hid_open_path(cur_dev->path);
@@ -45,11 +45,12 @@ void scan_joycons(void) {
 						printf("Error: Not running as root, could not connect "
 						       "to %ls\n",
 						       cur_dev->serial_number);
+						printf("Fix permissions or relaunch as root\n");
 						exit(1);
 					}
-					printf("Error: Could not open device serial=%ls\n",
-					       cur_dev->serial_number);
-					g_joycons[gidx].status = JC_ST_ERROR;
+					printf("Error: Could not open device serial=%ls: %s\n",
+					       cur_dev->serial_number,
+					       errno == 0 ? "Unknown error" : strerror(errno));
 				}
 			}
 			continue;
@@ -60,15 +61,15 @@ void scan_joycons(void) {
 			}
 		}
 		if (gidx == 10) {
-			printf("Error: Too many Joy-Cons connected via Bluetooth\n");
+			printf("Error: Too many Joy-Cons connected via Bluetooth. Cannot "
+			       "connect more.\n");
 			continue;
 		}
 		memset(&g_joycons[gidx], 0, sizeof(joycon_state));
-		joycon_state *jc = &g_joycons[gidx];
 		printf("Found JoyCon %c, #%i: %ls %s\n", side == JC_LEFT ? 'L' : 'R',
 		       gidx, cur_dev->serial_number, cur_dev->path);
-		jc->serial = wcsdup(cur_dev->serial_number);
 		errno = 0;
+		joycon_state *jc = &g_joycons[gidx];
 		jc->hidapi_handle = hid_open_path(cur_dev->path);
 		if (jc->hidapi_handle == NULL) {
 			int errnum = errno;
@@ -82,12 +83,14 @@ void scan_joycons(void) {
 			printf(
 			    "Error: Could not open device path=%s serial=%ls reason=%s\n",
 			    cur_dev->path, cur_dev->serial_number, strerror(errnum));
-			g_joycons[gidx].status = JC_ST_ERROR;
 			continue;
 		}
+		jc->serial = wcsdup(cur_dev->serial_number);
+		jc->side = side;
+		jc->status = JC_ST_WAITING_PAIR;
 
 		// Try to find stick calibration data
-		jc->status = JC_ST_WAITING_PAIR;
+		// TODO
 	}
 	hid_free_enumeration(devs);
 }
@@ -96,7 +99,7 @@ void scan_joycons(void) {
 static void assign_controller(joycon_state *jc, joycon_state *jc2) {
 	int cidx;
 	for (cidx = 0; cidx < MAX_OUTCONTROL; cidx++) {
-		if (g_controllers[cidx].active == CONTROLLER_STATUS_INACTIVE) {
+		if (g_controllers[cidx].status == CONTROLLER_STATUS_INACTIVE) {
 			break;
 		}
 	}
@@ -119,12 +122,12 @@ static void assign_controller(joycon_state *jc, joycon_state *jc2) {
 		c->jcr = jc2;
 		c->mapping = cmap_default_two_joycons;
 	}
-	c->active = CONTROLLER_STATUS_SETUP;
+	c->status = CONTROLLER_STATUS_SETUP;
 }
 
 static const uint8_t SL_SR = 0xFF & (JC_BUTTON_R_SR | JC_BUTTON_R_SL);
 
-static void attempt_pairing(joycon_state *jc) {
+void attempt_pairing(joycon_state *jc) {
 	if (((jc->buttons[0] & SL_SR) == SL_SR) ||
 	    ((jc->buttons[2] & SL_SR) == SL_SR)) {
 		// Pair as single
@@ -149,15 +152,6 @@ static void attempt_pairing(joycon_state *jc) {
 				assign_controller(jc, jc2);
 				return;
 			}
-		}
-	}
-}
-
-void controller_pairing_check(void) {
-	// Check for new controller pairing
-	for (int i = 0; i < MAX_JOYCON; i++) {
-		if (g_joycons[i].status == JC_ST_WAITING_PAIR) {
-			attempt_pairing(&g_joycons[i]);
 		}
 	}
 }

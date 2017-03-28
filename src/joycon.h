@@ -16,32 +16,46 @@
 #define JC_READ_TIMEOUT 4
 #endif
 
+#define JC_RECONNECT_TIME_MS 30 * 1000
+
 typedef enum e_jc_side { JC_SIDE_INVALID, JC_LEFT, JC_RIGHT } jc_side;
 
+// state transitions:
+//   Invalid -> Waiting_Pair on device detected
+//   Waiting_Pair -> Calibrating on start calibration
+//   Calibrating -> Waiting_Pair on finish calibration
+//   Waiting_Pair -> Active on controller assign
+//   Active -> Waiting_Pair on controller teardown
+//   Any -> Invalid on reconnect timeout
 typedef enum jc_status {
 	JC_ST_INVALID,
 	JC_ST_WAITING_PAIR,
 	JC_ST_CALIBRATING,
-	JC_ST_ACTIVE,
-	JC_ST_ERROR,
-	JC_ST_WANT_RECONNECT
+	JC_ST_ACTIVE
 } jc_status;
+
+typedef struct {
+	uint8_t neutral;
+	uint8_t dead_down;
+	uint8_t dead_up;
+	uint8_t min;
+	uint8_t max;
+} stick_calibration;
 
 typedef struct s_joycon_state {
 	wchar_t *serial;
 	void *hidapi_handle;
 	jc_side side;
 	jc_status status;
+	int64_t disconnected_at;
 
 	uint8_t stick_v;
 	uint8_t stick_h;
 	uint8_t buttons[3];
 
 	int outstanding_21_reports;
-	// vertical neutral, deadzone, min, max
-	// horizontal neutral, deadzone, min, max
-	uint8_t stick_config[8];
-
+	stick_calibration calib_v;
+	stick_calibration calib_h;
 } joycon_state;
 
 // byte number (2-4), bit number (mask & 0xFF)
@@ -73,7 +87,7 @@ typedef struct s_joycon_state {
 typedef uint16_t jc_button_id;
 
 void jc_poll_stage1(joycon_state *jc);
-int jc_poll_stage2(joycon_state *jc);
+void jc_poll_stage2(joycon_state *jc);
 
 bool jc_getbutton(jc_button_id bid, joycon_state *jc);
 bool jc_getbutton2(jc_button_id bid, joycon_state *jcl, joycon_state *jcr);

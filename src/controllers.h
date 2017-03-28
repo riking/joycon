@@ -34,14 +34,24 @@ typedef struct cmap {
 	size_t length;
 } cmap;
 
+// State transitions:
+//   Inactive -> Setup: L+R pressed
+//   Setup -> Active: input device created
+//   Setup -> Teardown: input device fails
+//   Active -> Dead_Con: Joy-Con dies
+//   Dead_Con -> Active: Joy-Con recovers
+//   Active -> Teardown: Controller removed by user
+//   Dead_Con -> Teardown: Timeout expires
+//   Teardown -> Inactive: cleanup
 #define CONTROLLER_STATUS_INACTIVE 0
 #define CONTROLLER_STATUS_SETUP 1
 #define CONTROLLER_STATUS_ACTIVE 2
-#define CONTROLLER_STATUS_PERMERROR 3
+#define CONTROLLER_STATUS_TEARDOWN 3
 #define CONTROLLER_STATUS_DEADCON 4
 
 typedef struct controller {
-	int active;
+	int status;
+	int fd;
 	joycon_state *jcl;
 	joycon_state *jcr;
 	uint8_t prev_button_state[3];
@@ -58,5 +68,15 @@ extern controller_state g_controllers[MAX_OUTCONTROL];
 
 extern const cmap cmap_default_two_joycons;
 extern const cmap cmap_default_one_joycon;
+
+int cnum(controller_state *c);
+void attempt_pairing(joycon_state *jc);
+
+// called from loop
+void tick_controller(controller_state *c);
+
+void destroy_controller(controller_state *c);
+void setup_controller(controller_state *c);
+void update_controller(controller_state *c);
 
 #endif // CONTROLLERS_H

@@ -1,11 +1,39 @@
 
 #include "joycon.h"
+#include "controllers.h"
 #include <hidapi/hidapi.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+static void jc_comm_error(joycon_state *jc) {
+	if (jc->hidapi_handle) {
+		printf("Disconnected from Joy-Con %ls, please reconnect\n", jc->serial);
+		jc->hidapi_handle = NULL;
+		time(&jc->disconnected_at);
+	}
+}
 
 void jc_poll_stage1(joycon_state *jc) {
 	if (jc->outstanding_21_reports > 1) {
+		return;
+	}
+	if (!jc->hidapi_handle) {
+		if (jc->disconnected_at + JC_RECONNECT_TIME_MS < time(NULL)) {
+			// Reconnect timed out
+			printf("Reconnect for Joy-Con %ls timed out, removing\n",
+			       jc->serial);
+			free(jc->serial);
+			memset(jc, 0, sizeof(joycon_state));
+			jc->status = JC_ST_INVALID;
+			for (int i = 0; i < MAX_OUTCONTROL; i++) {
+				if (g_controllers[i].jcl == jc || g_controllers[i].jcr == jc) {
+					// Joy-Con expired, so kill the controller
+					g_controllers[i].status = CONTROLLER_STATUS_TEARDOWN;
+				}
+			}
+		}
 		return;
 	}
 
@@ -15,7 +43,8 @@ void jc_poll_stage1(joycon_state *jc) {
 
 	int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
 	if (res < 0) {
-		jc->status = JC_ST_WANT_RECONNECT;
+		jc_comm_error(jc);
+		return;
 	}
 	jc->outstanding_21_reports++;
 }
@@ -40,8 +69,12 @@ static int jc_fill(joycon_state *jc, uint8_t *packet) {
 	return 1;
 }
 
-int jc_poll_stage2(joycon_state *jc) {
+void jc_poll_stage2(joycon_state *jc) {
 	uint8_t rbuf[0x31];
+
+	if (!jc->hidapi_handle)
+		return;
+
 	memset(rbuf, 0, 0x31);
 
 	while (1) {
@@ -49,17 +82,15 @@ int jc_poll_stage2(joycon_state *jc) {
 		read_res = hid_read_timeout((hid_device *)jc->hidapi_handle, rbuf, 0x31,
 		                            JC_READ_TIMEOUT);
 		if (read_res < 0) {
-			jc->status = JC_ST_WANT_RECONNECT;
-			return -1;
+			jc_comm_error(jc);
+			return;
 		} else if (read_res == 0) {
-			return 0;
+			return;
 		}
 		if (rbuf[0] == 0x21) {
 			jc->outstanding_21_reports--;
-			if (jc_fill(jc, rbuf + 1) < 0) {
-				return -1;
-			}
-			return 1;
+			jc_fill(jc, rbuf + 1);
+			return;
 		} else if (rbuf[0] == 0x3F) {
 			// Ignore 0x3F packets
 			continue;
@@ -69,7 +100,7 @@ int jc_poll_stage2(joycon_state *jc) {
 			continue;
 		}
 	}
-	return 0;
+	return;
 }
 
 bool jc_getbutton(jc_button_id bid, joycon_state *jc) {
