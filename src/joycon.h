@@ -55,7 +55,7 @@ typedef struct s_joycon_state {
 	jc_status status;
 	int64_t disconnected_at;
 
-	uint8_t maybe_battery;
+	uint8_t battery;
 	uint8_t stick_v;
 	uint8_t stick_h;
 	uint8_t buttons[3];
@@ -102,6 +102,7 @@ bool jc_getbutton2(jc_button_id bid, joycon_state *jcl, joycon_state *jcr);
 const char *jc_button_name(jc_button_id bid);
 jc_button_id jc_button_byname(char *str);
 
+void tick_calibration(joycon_state *jc);
 calibration_data calibration_file_load(wchar_t *serial);
 int calibration_file_save(wchar_t *serial, calibration_data data);
 

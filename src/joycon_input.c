@@ -1,6 +1,6 @@
 
-#include "controllers.h"
 #include "joycon.h"
+#include "controllers.h"
 #include <hidapi/hidapi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,7 +51,7 @@ void jc_poll_stage1(joycon_state *jc) {
 }
 
 static int jc_fill(joycon_state *jc, uint8_t *packet) {
-	jc->maybe_battery = packet[1];
+	jc->battery = ((packet[1] & 0x0F) << 4) | ((packet[1] & 0xF0) >> 4);
 
 	jc->buttons[0] = packet[2];
 	jc->buttons[1] = packet[3];

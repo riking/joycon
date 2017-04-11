@@ -175,15 +175,18 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 	}
 
 	if (((bu_now[1] & (JC_BUTTON_R_STI & 0xFF)) != 0) &&
-	    !(((bu_now[1] & (JC_BUTTON_R_STI & 0xFF)) != 0))) {
-		printf("sending 0x10...\n");
+	    !(((bu_prev[1] & (JC_BUTTON_R_STI & 0xFF)) != 0))) {
+		printf("sending 0x80...\n");
 		uint8_t packet[25];
 		memset(packet, 0, sizeof(packet));
-		packet[0] = 0x12;
-		memset(packet + 1, 1, 16);
-		packet[8] = crc_7_bytes(packet + 1);
-		packet[16] = crc_7_bytes(packet + 9);
-		hid_write(c->jcr->hidapi_handle, packet, 17);
+		packet[0] = 0x10;
+		packet[1] = 0x91;
+		packet[2] = 0x01;
+		errno = 0;
+		int ret = hid_write(c->jcr->hidapi_handle, packet, 8);
+		if (ret < 9) {
+		    printf("failed write %d: %s\n", ret, strerror(errno));
+		}
 	}
 }
 
