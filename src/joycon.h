@@ -55,6 +55,7 @@ typedef struct s_joycon_state {
 	jc_status status;
 	int64_t disconnected_at;
 
+	uint8_t maybe_battery;
 	uint8_t stick_v;
 	uint8_t stick_h;
 	uint8_t buttons[3];

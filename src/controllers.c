@@ -3,6 +3,7 @@
 #include "joycon.h"
 #include "uinput_keys.h"
 
+#include <hidapi/hidapi.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
 
@@ -69,6 +70,7 @@ void setup_controller(controller_state *c) {
 	}
 	printf("connecting uinput '%s'...\n", uidev.name);
 	uid.bustype = BUS_BLUETOOTH;
+	// uid.bustype = BUS_USB;
 	uid.vendor = JOYCON_VENDOR;
 	uid.product = JOYCON_PRODUCT_L - 5; // uhhhh just make something up
 	uid.version = 1;
@@ -170,6 +172,18 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 		if (write(c->fd, ev, sizeof(ev[0]) * evi) < 0) {
 			printf("Write error: %s", strerror(errno));
 		}
+	}
+
+	if (((bu_now[1] & (JC_BUTTON_R_STI & 0xFF)) != 0) &&
+	    !(((bu_now[1] & (JC_BUTTON_R_STI & 0xFF)) != 0))) {
+		printf("sending 0x10...\n");
+		uint8_t packet[25];
+		memset(packet, 0, sizeof(packet));
+		packet[0] = 0x12;
+		memset(packet + 1, 1, 16);
+		packet[8] = crc_7_bytes(packet + 1);
+		packet[16] = crc_7_bytes(packet + 9);
+		hid_write(c->jcr->hidapi_handle, packet, 17);
 	}
 }
 
