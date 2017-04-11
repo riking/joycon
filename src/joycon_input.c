@@ -1,6 +1,6 @@
 
-#include "joycon.h"
 #include "controllers.h"
+#include "joycon.h"
 #include <hidapi/hidapi.h>
 #include <stdio.h>
 #include <stdlib.h>
