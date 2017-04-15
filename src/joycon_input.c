@@ -37,11 +37,11 @@ void jc_poll_stage1(joycon_state *jc) {
 	// When syncing, we don't need to poll to get stick updates.
 	// We can just wait for the button push packets & send the packet then.
 	if (jc->status == JC_ST_ACTIVE && jc->outstanding_21_reports == 0) {
-		uint8_t packet[9];
-		memset(packet, 0, 9);
-		packet[0] = 0x01;
+		uint8_t packet[2];
+		packet[0] = 1;
+		packet[1] = 0;
 
-		int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
+		int res = hid_write((hid_device *)jc->hidapi_handle, packet, 2);
 		if (res < 0) {
 			jc_comm_error(jc);
 			return;
@@ -50,7 +50,17 @@ void jc_poll_stage1(joycon_state *jc) {
 	}
 }
 
-static int jc_fill(joycon_state *jc, uint8_t *packet) {
+static int jc_fill(joycon_state *jc, uint8_t *packet, int len) {
+	(void)len;
+	/*
+	printf("Got packet:\n");
+	int i = 0;
+	for (i = 0; i < len; i++) {
+	    printf("%02X ", packet[i]);
+	    if (i % 8 == 7)
+	        printf("\n");
+	}
+	*/
 	jc->battery = (packet[1] & 0xF0) >> 4;
 
 	jc->buttons[0] = packet[2];
@@ -92,18 +102,17 @@ void jc_poll_stage2(joycon_state *jc) {
 			return;
 		}
 		if (rbuf[0] == 0x21) {
-			jc_fill(jc, rbuf + 1);
+			jc_fill(jc, rbuf + 1, read_res);
 			if (jc->outstanding_21_reports > 0)
 				jc->outstanding_21_reports--;
 		} else if (rbuf[0] == 0x3F) {
 			// Got button update, request an update if we aren't waiting for one
 			if (!sent_21) {
-				uint8_t packet[9];
-				memset(packet, 0, 9);
-				packet[0] = 0x01;
+				uint8_t packet[2];
+				packet[0] = 1;
+				packet[1] = 0;
 
-				// printf("got button update, requesting 0x1\n");
-				int res = hid_write((hid_device *)jc->hidapi_handle, packet, 9);
+				int res = hid_write((hid_device *)jc->hidapi_handle, packet, 2);
 				if (res < 0) {
 					jc_comm_error(jc);
 					return;

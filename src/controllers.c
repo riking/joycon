@@ -185,7 +185,7 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 		errno = 0;
 		int ret = hid_write(c->jcr->hidapi_handle, packet, 8);
 		if (ret < 9) {
-		    printf("failed write %d: %s\n", ret, strerror(errno));
+			printf("failed write %d: %s\n", ret, strerror(errno));
 		}
 	}
 }
