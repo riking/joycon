@@ -2,17 +2,6 @@
 
 # Bluetooth HID Information
 
-## OUTPUT 1
-
-The OUTPUT 1 report requests the current controller status. It takes no data, but you need to include 1 (zeroed) byte of data with the report to comply with the spec.
-
-```
-uint8_t buf[2];
-buf[0] = 1;
-buf[1] = 0;
-hid_write(handle, buf, 2);
-```
-
 ## INPUT 63
 
 This input packet is pushed to the host when a button is pressed or released, and provides the "normal controller" interface for the OS.
@@ -24,7 +13,9 @@ This input packet is pushed to the host when a button is pressed or released, an
 |   3          | `08` | Stick hat data |
 |   4-11       | `00 80 00 80 00 80 00 80` | Filler data |
 
-### Stick hat data format
+### Stick hat data
+
+Hold your controller sideways so that SL, SYNC, and SR line up with the screen. Pushing the stick towards a direction in this table will cause that value to be sent.
 
 | SL | SYNC | SR |
 | --:|:----:|:-- |
@@ -53,6 +44,17 @@ This input packet is pushed to the host when a button is pressed or released, an
 | 2 | `40` | L / R |
 | 2 | `80` | ZL / ZR |
 
+## OUTPUT 1
+
+The OUTPUT 1 report requests the current controller status. It takes no data, but you need to include 1 (zeroed) byte of data with the report to comply with the spec.
+
+```
+uint8_t buf[2];
+buf[0] = 1;
+buf[1] = 0;
+hid_write(handle, buf, 2);
+```
+
 ## INPUT 33
 
 The "Controller Status Report" packet is sent in reply to each OUTPUT 1 report.
@@ -62,12 +64,12 @@ Packet format:
 |    Byte #    |        Sample value            | Remarks |
 |:------------:|:------------------------------:|:-----:|
 |   0          | `8D`, `A6`, `41` | Unknown, changes rapidly (checksum?)
-|   1 high nibble  | `8`, `6`, `2`    | Battery level |
+|   1 high nibble  | `8`, `6`, `5`, `2`    | Battery level |
 |   1 low nibble   | `E`              | Unknown |
 | 2-4          | `25 02 00` | Button status, see below |
 | 5-7          | `E3 56 9D` | Left stick data, see below |
 | 8-10         | `DF 86 A4` | Right stick data, see below |
-| 11-14        | `03 80 00 03`, `02 81 01 0C`, `02 81 01 0C` | Unknown |
+| 11-14        | `03 80 00 03` | Unknown |
 | 15-49        | Zero       | Unknown |
 
 
