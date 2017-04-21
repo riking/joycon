@@ -1,6 +1,12 @@
 
-switch: 98:b6:e9:2a:b0:cb
-joycon R: 98:b6:e9:74:1b:22
+kane switch: 98:b6:e9:2a:b0:cb
+kane joycon R: 98:b6:e9:74:1b:22
 friend's joycon R: 7c:bb:8a:e1:5f:90
+berto switch  : 7c:bb:8a:da:ba:b2
+berto joycon R: 98:b6:e9:74:bd:95
+berto joycon L: 98:b6:e9:75:a9:e4
 
 my adapter: 34:02:86:62:B8:6B
+CSR adapter: 00:1A:7D:DA:71:13
+IOG adapter: 5C:F3:70:81:0C:03
+hacked adapter: 7c:bb:8a:e1:5f:91

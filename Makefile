@@ -20,7 +20,7 @@ OBJS = $(SRCS:.c=.o)
 
 all: jcmapper
 
-format: $(SRCS) $(HEADS)
+format: $(SRCS) $(HEADS) switchconnect/main.c
 	clang-format -style=file -i $^
 
 clean:
@@ -31,6 +31,9 @@ jcmapper: $(OBJS)
 
 jcreader: devinput/hidapi_demo.c
 	gcc -o $@ devinput/hidapi_demo.c $(shell pkg-config --libs hidapi-hidraw) -fsanitize=address -g
+
+swprobe: switchconnect/main.c
+	gcc -o $@ $^ -lbluetooth
 
 %.o: %.c $(HEADS)
 	gcc -c -o $@ $< $(CFLAGS)

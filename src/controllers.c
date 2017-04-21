@@ -117,6 +117,15 @@ void setup_controller(controller_state *c) {
 		return;
 	}
 	c->status = CONTROLLER_STATUS_ACTIVE;
+	printf("Controller #%i set up\n", cnum(c));
+	printf("Battery: ");
+	if (c->jcl) {
+		printf("Left %d ", c->jcl->battery);
+	}
+	if (c->jcr) {
+		printf("Right %d", c->jcr->battery);
+	}
+	printf("\n");
 }
 
 void destroy_controller(controller_state *c) {
