@@ -33,9 +33,12 @@ static unsigned short psm_list[] = {
 
 typedef struct s_proxyconn {
 	int which;
+	int info_response_cnt;
 	// connection request
 	int hid_c_scid;
 	int hid_i_scid;
+	char *adapter;
+	char *device;
 
 	struct pollfd *pfd;
 	struct s_proxyconn *other;
@@ -70,13 +73,13 @@ void hexdump(int which, uint8_t *buf, ssize_t len) {
 	printf("\n");
 }
 
-void writedump(int which, char *buf, ssize_t len) {
+void writedump(int which, int port, char *buf, ssize_t len) {
 	if (!debug)
 		return;
 	if (len < 0)
 		return;
 
-	printf("PCKT %s > %s: %ld\n", which_from(which), which_to(which), len);
+	printf("PCKT %d %s > %s: %ld b\n", port, which_from(which), which_to(which), len);
 	// TODO - parsing?
 	hexdump(which, buf, len);
 }
@@ -128,11 +131,11 @@ int l2cap_rawconnect(char *adapter, char *device) {
 	return fd;
 }
 
-int l2cap_connect(char *adapter, char *device) {
+int l2cap_connect(char *adapter, char *device, int psm) {
 	int fd;
 	struct sockaddr_l2 addr;
 
-	fd = socket(AF_BLUETOOTH, SOCK_RAW | SOCK_NONBLOCK, BTPROTO_L2CAP);
+	fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET | SOCK_NONBLOCK, BTPROTO_L2CAP);
 	if (fd == -1) {
 		perror("socket");
 		return -1;
@@ -147,6 +150,7 @@ int l2cap_connect(char *adapter, char *device) {
 
 	memset(&addr, 0, sizeof(addr));
 	addr.l2_family = AF_BLUETOOTH;
+	addr.l2_psm = psm;
 	str2ba(device, &addr.l2_bdaddr);
 	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 		if (errno != EINPROGRESS) {
@@ -226,9 +230,13 @@ int main(int argc, char **argv) {
 	}
 	cidst[0].other = &cidst[1];
 	cidst[1].other = &cidst[0];
+	cidst[0].adapter = c_adapter;
+	cidst[0].device = c_addr;
+	cidst[1].adapter = j_adapter;
+	cidst[1].device = j_addr;
 
 	printf("Connecting...\n");
-	usleep(300000);
+	usleep(600000);
 	if (wait_for_connection(c_rawconn, j_rawconn) < 0) {
 		printf("Error: %s\n", strerror(errno));
 		return 1;
@@ -282,6 +290,15 @@ int wait_for_connection(int c_rawconn, int j_rawconn) {
 	}
 }
 
+void make_hid_connection(t_proxystate *a) {
+    return;
+    a->pfd[FDI_HIDC].fd = l2cap_connect(a->adapter, a->device, PSM_HID_Control);
+    a->pfd[FDI_HIDI].fd = l2cap_connect(a->adapter, a->device, PSM_HID_Interrupt);
+
+    a->pfd[FDI_HIDC].events = POLLIN;
+    a->pfd[FDI_HIDI].events = POLLIN;
+}
+
 #define READ_MAX 800
 
 void process_revents(t_proxystate *p) {
@@ -308,7 +325,7 @@ void process_revents(t_proxystate *p) {
 					done = 1;
 					continue;
 				}
-				writedump(p->which, buf, len);
+				writedump(p->which, 0, buf, len);
 				ret = 0;
 				switch (buf[0]) {
 				case L2CAP_CONN_REQ:
@@ -317,7 +334,11 @@ void process_revents(t_proxystate *p) {
 				case L2CAP_CONN_RSP:
 					printf("!!! Connection response\n");
 					break;
+				case L2CAP_INFO_RSP:
+					p->info_response_cnt++;
+					goto control_packet_default;
 				default:
+control_packet_default:
 					ret = write(p->other->pfd[FDI_CNTR].fd, buf, len);
 				}
 				if (ret < 0) {
@@ -325,8 +346,24 @@ void process_revents(t_proxystate *p) {
 					printf("write %s error: %s\n", which_to(p->which),
 					       strerror(errnum));
 				}
+				if (p->info_response_cnt == 2 && p->other->info_response_cnt == 2) {
+				    p->info_response_cnt = -0x300;
+				    p->other->info_response_cnt = -0x300;
+				    usleep(1000);
+				    make_hid_connection(p);
+				    make_hid_connection(p->other);
+				}
 			} else {
-				// TODO forward other packets
+				len = read(p->pfd[fdi].fd, buf, READ_MAX);
+				if (len < 0) {
+					errnum = errno;
+					printf("read %s error: %s\n", which_from(p->which),
+					       strerror(errnum));
+					done = 1;
+					continue;
+				}
+				writedump(p->which, fdi, buf, len);
+				ret = write(p->other->pfd[fdi].fd, buf, len);
 			}
 		}
 	}
