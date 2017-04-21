@@ -1,0 +1,6 @@
+
+switch: 98:b6:e9:2a:b0:cb
+joycon R: 98:b6:e9:74:1b:22
+friend's joycon R: 7c:bb:8a:e1:5f:90
+
+my adapter: 34:02:86:62:B8:6B
