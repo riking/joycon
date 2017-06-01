@@ -19,6 +19,7 @@ typedef struct cmap_entry {
 		struct s_cmap_axis {
 			jc_side side;
 			bool is_vertical;
+			bool is_reverse;
 			int uinput_axis;
 		} axis;
 		struct s_cmap_hat {

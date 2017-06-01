@@ -116,6 +116,48 @@ void setup_controller(controller_state *c) {
 		c->status = CONTROLLER_STATUS_TEARDOWN;
 		return;
 	}
+
+	uint8_t buf[10 + 2];
+	buf[0] = 1;
+	buf[10] = 0x48; // Vibration
+	buf[11] = 1;    // on
+	if (c->jcl) {
+		fill_blank_rumble_data(c->jcl, buf);
+		printf("sending vib=on %s:%d\n", __FILE__, __LINE__);
+		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 12);
+	}
+	if (c->jcr) {
+		fill_blank_rumble_data(c->jcr, buf);
+		printf("sending vib=on %s:%d\n", __FILE__, __LINE__);
+		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 12);
+	}
+	buf[10] = 0x40; // IMU
+	buf[11] = 1;    // on
+	if (c->jcl) {
+		fill_blank_rumble_data(c->jcl, buf);
+		printf("sending imu=on %s:%d\n", __FILE__, __LINE__);
+		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 12);
+	}
+	if (c->jcr) {
+		fill_blank_rumble_data(c->jcr, buf);
+		printf("sending imu=on %s:%d\n", __FILE__, __LINE__);
+		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 12);
+	}
+
+	// Player number
+	buf[10] = 0x30;
+	buf[11] = (1 << (cnum(c) + 1)) - 1;
+	if (c->jcl) {
+		fill_blank_rumble_data(c->jcl, buf);
+		printf("sending player number %s:%d\n", __FILE__, __LINE__);
+		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 12);
+	}
+	if (c->jcr) {
+		fill_blank_rumble_data(c->jcr, buf);
+		printf("sending player number %s:%d\n", __FILE__, __LINE__);
+		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 12);
+	}
+
 	c->status = CONTROLLER_STATUS_ACTIVE;
 	printf("Controller #%i set up\n", cnum(c));
 	printf("Battery: ");
@@ -183,17 +225,35 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 		}
 	}
 
-	if (((bu_now[1] & (JC_BUTTON_R_STI & 0xFF)) != 0) &&
-	    !(((bu_prev[1] & (JC_BUTTON_R_STI & 0xFF)) != 0))) {
-		printf("sending 0x80...\n");
-		uint8_t packet[25];
+	if ((((bu_now[1] & (JC_BUTTON_R_STI & 0xFF)) != 0) &&
+	     !((bu_prev[1] & (JC_BUTTON_R_STI & 0xFF)) != 0)) ||
+	    (((bu_now[1] & (JC_BUTTON_L_STI & 0xFF)) != 0) &&
+	     !((bu_prev[1] & (JC_BUTTON_L_STI & 0xFF)) != 0))) {
+		printf("sending %s:%d\n", __FILE__, __LINE__);
+		uint8_t packet[0x40];
 		memset(packet, 0, sizeof(packet));
-		packet[0] = 0x10;
-		packet[1] = 0x91;
-		packet[2] = 0x01;
+		packet[0] = 0x1;
+		if (c->jcr)
+			fill_blank_rumble_data(c->jcr, packet);
+		else
+			fill_blank_rumble_data(c->jcl, packet);
+		packet[10] = 0x50;
+		packet[11] = 6;
+		packet[12] = 0;
+		packet[13] = 0;
+		packet[14] = 0;
+		packet[15] = 0;
+		packet[16] = 0;
+		packet[17] = 0;
+		packet[18] = 0;
+		// memset(packet + 11, 0x9F, 7);
 		errno = 0;
-		int ret = hid_write(c->jcr->hidapi_handle, packet, 8);
-		if (ret < 9) {
+		int ret;
+		if (c->jcr)
+			ret = hid_write(c->jcr->hidapi_handle, packet, 0x40);
+		else
+			ret = hid_write(c->jcl->hidapi_handle, packet, 49);
+		if (ret < 0) {
 			printf("failed write %d: %s\n", ret, strerror(errno));
 		}
 	}
@@ -209,12 +269,13 @@ static void joycon_died(controller_state *c) {
 	memset(c->prev_rstick_state, 0, sizeof(c->prev_rstick_state));
 }
 
-static int get_axis_mapping(controller_state *c, jc_side side,
-                            bool is_vertical) {
+static int get_axis_mapping(controller_state *c, jc_side side, bool is_vertical,
+                            bool *is_reverse) {
 	for (size_t q = 0; q < c->mapping.length; q++) {
 		if (c->mapping.ptr[q].type == CONTROLLER_MAP_AXIS &&
 		    c->mapping.ptr[q].axis.side == side &&
 		    c->mapping.ptr[q].axis.is_vertical == is_vertical) {
+			*is_reverse = c->mapping.ptr[q].axis.is_reverse;
 			return c->mapping.ptr[q].axis.uinput_axis;
 		}
 	}
@@ -265,30 +326,37 @@ void update_controller(controller_state *c) {
 	memcpy(c->prev_button_state, buttons, 3);
 	struct input_event evs[4];
 	int evi = 0;
+	bool is_reverse;
 	memset(evs, 0, sizeof(evs));
 	if (c->jcl) {
 		bool nonzero = false;
 		if (c->jcl->stick_v != c->prev_lstick_state[0]) {
-			int mapping = get_axis_mapping(c, JC_LEFT, true);
+			int mapping = get_axis_mapping(c, JC_LEFT, true, &is_reverse);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcl->calib_v, c->jcl->stick_v);
-				if (evs[evi].value != 0x80)
+				if (evs[evi].value != 0x80) {
 					nonzero = true;
+					if (is_reverse)
+						evs[evi].value = 0xFF - evs[evi].value;
+				}
 				evi++;
 			}
 		}
 		if (c->jcl->stick_h != c->prev_lstick_state[1]) {
-			int mapping = get_axis_mapping(c, JC_LEFT, false);
+			int mapping = get_axis_mapping(c, JC_LEFT, false, &is_reverse);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcl->calib_h, c->jcl->stick_h);
-				if (evs[evi].value != 0x80)
+				if (evs[evi].value != 0x80) {
 					nonzero = true;
+					if (is_reverse)
+						evs[evi].value = 0xFF - evs[evi].value;
+				}
 				evi++;
 			}
 		}
@@ -302,26 +370,32 @@ void update_controller(controller_state *c) {
 	if (c->jcr) {
 		bool nonzero = false;
 		if (c->jcr->stick_v != c->prev_rstick_state[0]) {
-			int mapping = get_axis_mapping(c, JC_RIGHT, true);
+			int mapping = get_axis_mapping(c, JC_RIGHT, true, &is_reverse);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcr->calib_v, c->jcr->stick_v);
-				if (evs[evi].value != 0x80)
+				if (evs[evi].value != 0x80) {
 					nonzero = true;
+					if (is_reverse)
+						evs[evi].value = 0xFF - evs[evi].value;
+				}
 				evi++;
 			}
 		}
 		if (c->jcr->stick_h != c->prev_rstick_state[1]) {
-			int mapping = get_axis_mapping(c, JC_RIGHT, false);
+			int mapping = get_axis_mapping(c, JC_RIGHT, false, &is_reverse);
 			if (mapping != ABS_MAX) {
 				evs[evi].type = EV_ABS;
 				evs[evi].code = mapping;
 				evs[evi].value =
 				    calibrated_stick(c->jcr->calib_h, c->jcr->stick_h);
-				if (evs[evi].value != 0x80)
+				if (evs[evi].value != 0x80) {
 					nonzero = true;
+					if (is_reverse)
+						evs[evi].value = 0xFF - evs[evi].value;
+				}
 				evi++;
 			}
 		}

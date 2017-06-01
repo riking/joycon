@@ -101,17 +101,17 @@ static cmap_entry default_two_joycons[] = {
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_RX,
+             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_Z,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_RY,
+             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_RX,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_RIGHT, .is_vertical = false, .uinput_axis = ABS_Z,
+             .side = JC_RIGHT, .is_vertical = false, .uinput_axis = ABS_RY,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
@@ -243,22 +243,22 @@ static cmap_entry default_one_joycon[] = {
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_RX,
+             .side = JC_LEFT, .is_vertical = true, .uinput_axis = ABS_Z,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_RY,
+             .side = JC_LEFT, .is_vertical = false, .uinput_axis = ABS_RX,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_RIGHT, .is_vertical = true, .uinput_axis = ABS_RX,
+             .side = JC_RIGHT, .is_vertical = true, .uinput_axis = ABS_Z,
          }},
     {.type = CONTROLLER_MAP_AXIS,
      .axis =
          {
-             .side = JC_RIGHT, .is_vertical = false, .uinput_axis = ABS_RY,
+             .side = JC_RIGHT, .is_vertical = false, .uinput_axis = ABS_RX,
          }},
     {.type = CONTROLLER_MAP_EOF}};
 

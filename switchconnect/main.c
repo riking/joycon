@@ -79,7 +79,8 @@ void writedump(int which, int port, char *buf, ssize_t len) {
 	if (len < 0)
 		return;
 
-	printf("PCKT %d %s > %s: %ld b\n", port, which_from(which), which_to(which), len);
+	printf("PCKT %d %s > %s: %ld b\n", port, which_from(which), which_to(which),
+	       len);
 	// TODO - parsing?
 	hexdump(which, buf, len);
 }
@@ -291,12 +292,13 @@ int wait_for_connection(int c_rawconn, int j_rawconn) {
 }
 
 void make_hid_connection(t_proxystate *a) {
-    return;
-    a->pfd[FDI_HIDC].fd = l2cap_connect(a->adapter, a->device, PSM_HID_Control);
-    a->pfd[FDI_HIDI].fd = l2cap_connect(a->adapter, a->device, PSM_HID_Interrupt);
+	return;
+	a->pfd[FDI_HIDC].fd = l2cap_connect(a->adapter, a->device, PSM_HID_Control);
+	a->pfd[FDI_HIDI].fd =
+	    l2cap_connect(a->adapter, a->device, PSM_HID_Interrupt);
 
-    a->pfd[FDI_HIDC].events = POLLIN;
-    a->pfd[FDI_HIDI].events = POLLIN;
+	a->pfd[FDI_HIDC].events = POLLIN;
+	a->pfd[FDI_HIDI].events = POLLIN;
 }
 
 #define READ_MAX 800
@@ -338,7 +340,7 @@ void process_revents(t_proxystate *p) {
 					p->info_response_cnt++;
 					goto control_packet_default;
 				default:
-control_packet_default:
+				control_packet_default:
 					ret = write(p->other->pfd[FDI_CNTR].fd, buf, len);
 				}
 				if (ret < 0) {
@@ -346,12 +348,13 @@ control_packet_default:
 					printf("write %s error: %s\n", which_to(p->which),
 					       strerror(errnum));
 				}
-				if (p->info_response_cnt == 2 && p->other->info_response_cnt == 2) {
-				    p->info_response_cnt = -0x300;
-				    p->other->info_response_cnt = -0x300;
-				    usleep(1000);
-				    make_hid_connection(p);
-				    make_hid_connection(p->other);
+				if (p->info_response_cnt == 2 &&
+				    p->other->info_response_cnt == 2) {
+					p->info_response_cnt = -0x300;
+					p->other->info_response_cnt = -0x300;
+					usleep(1000);
+					make_hid_connection(p);
+					make_hid_connection(p->other);
 				}
 			} else {
 				len = read(p->pfd[fdi].fd, buf, READ_MAX);

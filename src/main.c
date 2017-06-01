@@ -18,16 +18,16 @@ static void mainloop(void) {
 	if (scan_tick == 60)
 		scan_tick = 0;
 
-	// Poll for input
-	for (int i = 0; i < MAX_JOYCON; i++) {
-		if (g_joycons[i].status != 0) {
-			jc_poll_stage1(&g_joycons[i]);
-		}
-	}
 	// Receive input
 	for (int i = 0; i < MAX_JOYCON; i++) {
 		if (g_joycons[i].status != 0) {
 			jc_poll_stage2(&g_joycons[i]);
+		}
+	}
+	// Poll for input
+	for (int i = 0; i < MAX_JOYCON; i++) {
+		if (g_joycons[i].status != 0) {
+			jc_poll_stage1(&g_joycons[i]);
 		}
 	}
 	// Pair new controllers, perform calibration
@@ -108,7 +108,7 @@ int main(void) {
 		// Compute now + 1/60 second
 		clock_gettime(CLOCK_MONOTONIC, &sleep_target);
 		uint64_t nsec = sleep_target.tv_nsec;
-		nsec += 30 * (BILLION / 1000LL);
+		nsec += 16.667 * (BILLION / 1000LL);
 		if (nsec > BILLION) {
 			sleep_target.tv_nsec = nsec - BILLION;
 			sleep_target.tv_sec += 1;

@@ -24,7 +24,9 @@ format: $(SRCS) $(HEADS) switchconnect/main.c
 	clang-format -style=file -i $^
 
 clean:
-	find . -name '*.o' -delete
+	rm -f $(OBJS)
+	rm -f devinput/hidapi_demo.o
+	rm -f switchconnect/main.o
 
 jcmapper: $(OBJS)
 	gcc -o $@ $^ $(LDFLAGS)

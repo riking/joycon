@@ -15,6 +15,19 @@ static void jc_comm_error(joycon_state *jc) {
 	}
 }
 
+void fill_blank_rumble_data(joycon_state *jc, uint8_t *packet) {
+	jc->rumble_id++;
+	packet[1] = jc->rumble_id & 0xF;
+	packet[2] = 0;
+	packet[3] = 1;
+	packet[4] = 0x40;
+	packet[5] = 0x40;
+	packet[6] = 0;
+	packet[7] = 1;
+	packet[8] = 0x40;
+	packet[9] = 0x40;
+}
+
 void jc_poll_stage1(joycon_state *jc) {
 	if (!jc->hidapi_handle) {
 		if (jc->disconnected_at + JC_RECONNECT_TIME_MS < time(NULL)) {
@@ -36,31 +49,81 @@ void jc_poll_stage1(joycon_state *jc) {
 
 	// When syncing, we don't need to poll to get stick updates.
 	// We can just wait for the button push packets & send the packet then.
-	if (jc->status == JC_ST_ACTIVE && jc->outstanding_21_reports == 0) {
-		uint8_t packet[2];
-		packet[0] = 1;
-		packet[1] = 0;
+	if (jc->status == JC_ST_ACTIVE && jc->outstanding_21_reports < 4) {
+		/*
+		    uint8_t packet[0x40];
+		    memset(packet, 0, sizeof(packet));
+		    packet[0] = 1;
+		    fill_blank_rumble_data(jc, packet);
+		    packet[10] = 0;
 
-		int res = hid_write((hid_device *)jc->hidapi_handle, packet, 2);
+		    struct timespec now;
+		    clock_gettime(CLOCK_REALTIME, &now);
+		    printf("sending %s %d at %lld.%.9ld\n", __FILE__, __LINE__, (long
+		   long)now.tv_sec, now.tv_nsec);
+		    int res = hid_write((hid_device *)jc->hidapi_handle, packet, 12);
+		    if (res < 0) {
+		        jc_comm_error(jc);
+		        return;
+		    }
+		    jc->outstanding_21_reports++;
+		    */
+	}
+
+	if (!jc->did_handshake) {
+		jc->did_handshake = true;
+		uint8_t packet[0x40];
+		memset(packet, 0, sizeof(packet));
+		packet[0] = 0x1;
+		fill_blank_rumble_data(jc, packet);
+		packet[10] = 0x3;
+		packet[11] = 0;
+		packet[12] = 1;
+		printf("sending %s:%d\n", __FILE__, __LINE__);
+		int res = hid_write((hid_device *)jc->hidapi_handle, packet, 0x38);
 		if (res < 0) {
 			jc_comm_error(jc);
-			return;
 		}
-		jc->outstanding_21_reports++;
+		packet[0] = 0x1;
+		//        fill_blank_rumble_data(jc, packet);
+		packet[10] = 0x38;
+		packet[11] = 0;
+		printf("sending %s:%d\n", __FILE__, __LINE__);
+		res = hid_write((hid_device *)jc->hidapi_handle, packet, 0x38);
+		if (res < 0) {
+			jc_comm_error(jc);
+		}
+	}
+
+	// Test - does sending packet 0x10 prevent disconnects?
+	int64_t now = time(NULL);
+	if ((now - jc->last_packet10_at) > 16) {
+		uint8_t packet[0x40];
+		memset(packet, 0, sizeof(packet));
+		packet[0] = 0x1;
+		fill_blank_rumble_data(jc, packet);
+		// spi_read 0x6050, len=6
+		packet[10] = 38;
+		packet[11] = 0xFF;
+		//        const uint32_t read_addr = 0x6050;
+		//        *((uint32_t*)&packet[11]) = read_addr;
+		//         packet[11 + 4] = 6;
+
+		printf("sending %s:%d\n", __FILE__, __LINE__);
+		int res = hid_write((hid_device *)jc->hidapi_handle, packet, 0x38);
+		if (res < 0) {
+			jc_comm_error(jc);
+		}
+		jc->last_packet10_at = now;
 	}
 }
 
 static int jc_fill(joycon_state *jc, uint8_t *packet, int len) {
+	struct timespec now;
+	clock_gettime(CLOCK_REALTIME, &now);
+	// printf("got input data at %lld.%.9ld\n", (long long)now.tv_sec,
+	// now.tv_nsec);
 	(void)len;
-	/*
-	printf("Got packet:\n");
-	int i = 0;
-	for (i = 0; i < len; i++) {
-	    printf("%02X ", packet[i]);
-	    if (i % 8 == 7)
-	        printf("\n");
-	}
-	*/
 	jc->battery = (packet[1] & 0xF0) >> 4;
 
 	jc->buttons[0] = packet[2];
@@ -78,6 +141,21 @@ static int jc_fill(joycon_state *jc, uint8_t *packet, int len) {
 		// packet[8];
 		jc->stick_h = ((packet[9] & 0x0F) << 4) | ((packet[8] & 0xF0) >> 4);
 		jc->stick_v = packet[10];
+	}
+
+	if (packet[12] != 0x80 && packet[12] != 0) {
+		// More data
+		printf("Got packet:\n");
+		int i = 0;
+		for (i = 0; i < len; i++) {
+			printf("%02X ", packet[i]);
+			if (i % 8 == 7)
+				printf("\n");
+		}
+		printf("\n");
+		if (packet[13] == 0x10) {
+			// SPI Flash read
+		}
 	}
 	return 1;
 }
@@ -101,23 +179,29 @@ void jc_poll_stage2(joycon_state *jc) {
 		} else if (read_res == 0) {
 			return;
 		}
+		if (rbuf[0] != 0x30)
+			printf("receive packet id %02X\n", rbuf[0]);
 		if (rbuf[0] == 0x21) {
 			jc_fill(jc, rbuf + 1, read_res);
-			if (jc->outstanding_21_reports > 0)
-				jc->outstanding_21_reports--;
+		} else if (rbuf[0] == 0x30) {
+			jc_fill(jc, rbuf + 1, read_res);
+			sent_21 = true;
 		} else if (rbuf[0] == 0x3F) {
 			// Got button update, request an update if we aren't waiting for one
 			if (!sent_21) {
-				uint8_t packet[2];
-				packet[0] = 1;
-				packet[1] = 0;
+				uint8_t packet[0x40];
+				memset(packet, 0, sizeof(packet));
+				packet[0] = 0x1;
+				packet[10] = 1;
 
-				int res = hid_write((hid_device *)jc->hidapi_handle, packet, 2);
+				printf("sending %s:%d\n", __FILE__, __LINE__);
+				int res =
+				    hid_write((hid_device *)jc->hidapi_handle, packet, 0x40);
 				if (res < 0) {
 					jc_comm_error(jc);
 					return;
 				}
-				jc->outstanding_21_reports++;
+				//				jc->outstanding_21_reports++;
 				sent_21 = true;
 			}
 			continue;

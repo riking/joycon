@@ -56,11 +56,16 @@ typedef struct s_joycon_state {
 	jc_side side;
 	jc_status status;
 	int64_t disconnected_at;
+	int64_t last_packet10_at;
+	int8_t rumble_id;
+	bool did_handshake;
 
 	uint8_t battery;
 	uint8_t stick_v;
 	uint8_t stick_h;
 	uint8_t buttons[3];
+
+	int16_t gyro_data[12];
 
 	int outstanding_21_reports;
 	stick_calibration calib_v;
@@ -104,6 +109,7 @@ bool jc_getbutton2(jc_button_id bid, joycon_state *jcl, joycon_state *jcr);
 const char *jc_button_name(jc_button_id bid);
 jc_button_id jc_button_byname(char *str);
 
+void fill_blank_rumble_data(joycon_state *jc, uint8_t *packet);
 void tick_calibration(joycon_state *jc);
 calibration_data calibration_file_load(wchar_t *serial);
 int calibration_file_save(wchar_t *serial, calibration_data data);
