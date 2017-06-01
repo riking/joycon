@@ -161,17 +161,16 @@ static int jc_fill(joycon_state *jc, uint8_t *packet, int len) {
 }
 
 void jc_poll_stage2(joycon_state *jc) {
-	uint8_t rbuf[0x31];
+	uint8_t rbuf[0x60];
 
 	if (!jc->hidapi_handle)
 		return;
 
-	memset(rbuf, 0, 0x31);
-
 	bool sent_21 = jc->outstanding_21_reports > 0;
 	while (1) {
 		int read_res;
-		read_res = hid_read_timeout((hid_device *)jc->hidapi_handle, rbuf, 0x31,
+		memset(rbuf, 0, 0x60);
+		read_res = hid_read_timeout((hid_device *)jc->hidapi_handle, rbuf, 0x60,
 		                            JC_READ_TIMEOUT);
 		if (read_res < 0) {
 			jc_comm_error(jc);

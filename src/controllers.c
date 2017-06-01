@@ -117,45 +117,45 @@ void setup_controller(controller_state *c) {
 		return;
 	}
 
-	uint8_t buf[10 + 2];
+	uint8_t buf[0x40];
+	memset(buf, 0, sizeof(buf));
 	buf[0] = 1;
 	buf[10] = 0x48; // Vibration
 	buf[11] = 1;    // on
 	if (c->jcl) {
 		fill_blank_rumble_data(c->jcl, buf);
 		printf("sending vib=on %s:%d\n", __FILE__, __LINE__);
-		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 12);
+		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 0x40);
 	}
 	if (c->jcr) {
 		fill_blank_rumble_data(c->jcr, buf);
 		printf("sending vib=on %s:%d\n", __FILE__, __LINE__);
-		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 12);
+		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 0x40);
 	}
 	buf[10] = 0x40; // IMU
 	buf[11] = 1;    // on
 	if (c->jcl) {
-		fill_blank_rumble_data(c->jcl, buf);
 		printf("sending imu=on %s:%d\n", __FILE__, __LINE__);
-		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 12);
+		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 0x40);
 	}
 	if (c->jcr) {
-		fill_blank_rumble_data(c->jcr, buf);
 		printf("sending imu=on %s:%d\n", __FILE__, __LINE__);
-		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 12);
+		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 0x40);
 	}
 
 	// Player number
 	buf[10] = 0x30;
-	buf[11] = (1 << (cnum(c) + 1)) - 1;
+	buf[11] = 0x7;
+	buf[12] = (1 << (cnum(c) + 1)) - 1;
+	buf[13] = (1 << (cnum(c) + 1)) - 1;
+	buf[14] = (1 << (cnum(c) + 1)) - 1;
 	if (c->jcl) {
-		fill_blank_rumble_data(c->jcl, buf);
 		printf("sending player number %s:%d\n", __FILE__, __LINE__);
-		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 12);
+		hid_write((hid_device *)c->jcl->hidapi_handle, buf, 0x40);
 	}
 	if (c->jcr) {
-		fill_blank_rumble_data(c->jcr, buf);
 		printf("sending player number %s:%d\n", __FILE__, __LINE__);
-		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 12);
+		hid_write((hid_device *)c->jcr->hidapi_handle, buf, 0x40);
 	}
 
 	c->status = CONTROLLER_STATUS_ACTIVE;
@@ -237,9 +237,9 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 			fill_blank_rumble_data(c->jcr, packet);
 		else
 			fill_blank_rumble_data(c->jcl, packet);
-		packet[10] = 0x50;
-		packet[11] = 6;
-		packet[12] = 0;
+		packet[10] = 0x30;
+		packet[11] = 0x62;
+		packet[12] = 0x0C;
 		packet[13] = 0;
 		packet[14] = 0;
 		packet[15] = 0;
@@ -252,7 +252,7 @@ static void dispatch_buttons(controller_state *c, uint8_t *bu_now,
 		if (c->jcr)
 			ret = hid_write(c->jcr->hidapi_handle, packet, 0x40);
 		else
-			ret = hid_write(c->jcl->hidapi_handle, packet, 49);
+			ret = hid_write(c->jcl->hidapi_handle, packet, 0x40);
 		if (ret < 0) {
 			printf("failed write %d: %s\n", ret, strerror(errno));
 		}
