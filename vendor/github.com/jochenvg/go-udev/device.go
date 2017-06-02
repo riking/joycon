@@ -52,6 +52,12 @@ func (d *Device) ParentWithSubsystemDevtype(subsystem, devtype string) *Device {
 	ss, dt := C.CString(subsystem), C.CString(devtype)
 	defer freeCharPtr(ss)
 	defer freeCharPtr(dt)
+	if subsystem == "" {
+		ss = nil
+	}
+	if devtype == "" {
+		dt = nil
+	}
 	ptr := C.udev_device_get_parent_with_subsystem_devtype(d.ptr, ss, dt)
 	if ptr != nil {
 		C.udev_device_ref(ptr)

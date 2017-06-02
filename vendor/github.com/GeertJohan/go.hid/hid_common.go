@@ -56,11 +56,6 @@ type DeviceInfo struct {
 	InterfaceNumber int
 }
 
-// Get actual hid *Device from DeviceInfo object
-func (di *DeviceInfo) Device() (*Device, error) {
-	return Open(di.VendorId, di.ProductId, di.SerialNumber)
-}
-
 // List of DeviceInfo objects
 type DeviceInfoList []*DeviceInfo
 

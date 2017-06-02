@@ -32,6 +32,11 @@ type Device struct {
 	hidHandle *C.hid_device
 }
 
+// Get actual hid *Device from DeviceInfo object
+func (di *DeviceInfo) Device() (*Device, error) {
+	return Open(di.VendorId, di.ProductId, di.SerialNumber)
+}
+
 // /** @brief Initialize the HIDAPI library.
 //
 //  This function initializes the HIDAPI library. Calling it is not
