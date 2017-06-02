@@ -69,6 +69,7 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType) (jcpc.JoyCon, err
 	jc.haveColors = false
 	jc.mode = modeButtonPush
 	jc.isAlive = true
+	
 	go jc.reader()
 	return jc, nil
 }

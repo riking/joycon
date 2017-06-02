@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"sync"
-
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GeertJohan/go.hid"
@@ -76,6 +75,7 @@ func (m *Manager) OnFrame() {
 	defer m.mu.Unlock()
 
 	for _, cv := range m.paired {
+		cv.o.OnFrame()
 		cv.c.OnFrame()
 		for _, jc := range cv.jc {
 			jc.OnFrame()
@@ -87,10 +87,10 @@ func (m *Manager) OnFrame() {
 }
 
 var (
-	buttonsSLSR_R = jcpc.ButtonState{byte(jcpc.Button_R_SL | jcpc.Button_R_SR), 0, 0}
-	buttonsSLSR_L = jcpc.ButtonState{0, 0, byte(jcpc.Button_L_SL | jcpc.Button_L_SR)}
-	buttonsRZR    = jcpc.ButtonState{byte(jcpc.Button_R_R | jcpc.Button_R_ZR), 0, 0}
-	buttonsLZL    = jcpc.ButtonState{0, 0, byte(jcpc.Button_L_L | jcpc.Button_L_ZL)}
+	buttonsSLSR_R = jcpc.ButtonState{byte((jcpc.Button_R_SL | jcpc.Button_R_SR) & 0xFF), 0, 0}
+	buttonsSLSR_L = jcpc.ButtonState{0, 0, byte((jcpc.Button_L_SL | jcpc.Button_L_SR) & 0xFF)}
+	buttonsRZR    = jcpc.ButtonState{byte((jcpc.Button_R_R | jcpc.Button_R_ZR) & 0xFF), 0, 0}
+	buttonsLZL    = jcpc.ButtonState{0, 0, byte((jcpc.Button_L_L | jcpc.Button_L_ZL) & 0xFF)}
 
 	buttonsAnyLR = jcpc.ButtonState{}.Union(buttonsRZR).Union(buttonsLZL).Union(buttonsSLSR_L).Union(buttonsSLSR_R)
 )
@@ -100,6 +100,23 @@ func (m *Manager) doPairing(idx1, idx2 int) {
 	defer m.mu.Unlock()
 
 	m.doPairing_(idx1, idx2)
+
+	didPair := []int{idx1, idx2}
+	if idx2 == -1 {
+		didPair = []int{idx1}
+	}
+	newUnpaired := make([]unpairedController, len(m.unpaired)-len(didPair))
+	sort.Ints(didPair)
+	i := 0
+	k := 0
+	for j, v := range m.unpaired {
+		if j == didPair[k] {
+			k++
+		} else {
+			newUnpaired[i] = v
+			i++
+		}
+	}
 }
 
 func (m *Manager) doPairing_(idx1, idx2 int) {

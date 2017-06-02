@@ -16,6 +16,22 @@
 			"revision": "cd5395e4d58196799fb6a6841112bf1ccb8eb5b1",
 			"branch": "master",
 			"notests": true
+		},
+		{
+			"importpath": "github.com/jkeiser/iter",
+			"repository": "https://github.com/jkeiser/iter",
+			"vcs": "git",
+			"revision": "67b94d6149c6b2efe0fde15d36a50a7692c2da17",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/jochenvg/go-udev",
+			"repository": "https://github.com/jochenvg/go-udev",
+			"vcs": "git",
+			"revision": "b7a82d7b755ee9b24b4a4cfd2c0626200903810a",
+			"branch": "master",
+			"notests": true
 		}
 	]
 }
