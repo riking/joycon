@@ -1,0 +1,21 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/GeertJohan/cgo.wchar",
+			"repository": "https://github.com/GeertJohan/cgo.wchar",
+			"vcs": "git",
+			"revision": "a0ecb6cbd4aca3df15c391d95d087d92e5eeb8f7",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/GeertJohan/go.hid",
+			"repository": "https://github.com/GeertJohan/go.hid",
+			"vcs": "git",
+			"revision": "cd5395e4d58196799fb6a6841112bf1ccb8eb5b1",
+			"branch": "master",
+			"notests": true
+		}
+	]
+}
