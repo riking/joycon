@@ -174,7 +174,7 @@ func (b ButtonState) HasAll(mask ButtonState) bool {
 }
 
 func (b ButtonState) HasAny(mask ButtonState) bool {
-	var result bool = true
+	var result bool = false
 	result = result || (b[0]&mask[0]) != 0
 	result = result || (b[1]&mask[1]) != 0
 	result = result || (b[2]&mask[2]) != 0

@@ -55,10 +55,11 @@ type joyconBluetooth struct {
 	subcommandQueue [][]byte
 }
 
-func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType) (jcpc.JoyCon, error) {
+func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface) (jcpc.JoyCon, error) {
 	var err error
 	jc := &joyconBluetooth{
 		hidHandle: hidHandle,
+		ui: ui,
 	}
 	jc.serial, err = hidHandle.SerialNumberString()
 	if err != nil {
@@ -243,6 +244,7 @@ func (jc *joyconBluetooth) getNextRumble() (byte, [8]byte, bool) {
 		jc.rumbleCurrent.Time--
 		return jc.rumbleTimer, jc.rumbleCurrent.Data, false
 	}
+	needUpdate := true
 	jc.rumbleTimer++
 	if jc.rumbleTimer == 16 {
 		jc.rumbleTimer = 0
@@ -251,9 +253,14 @@ func (jc *joyconBluetooth) getNextRumble() (byte, [8]byte, bool) {
 		jc.rumbleCurrent = jc.rumbleQueue[0]
 		jc.rumbleQueue = jc.rumbleQueue[1:]
 	} else {
-		jc.rumbleCurrent = jcpc.RumbleDataNeutral
+		if jc.rumbleCurrent.Data == jcpc.RumbleDataNeutral.Data {
+			needUpdate = false
+			jc.rumbleCurrent.Time = jcpc.RumbleDataNeutral.Time
+		} else {
+			jc.rumbleCurrent = jcpc.RumbleDataNeutral
+		}
 	}
-	return jc.rumbleTimer, jc.rumbleCurrent.Data, true
+	return jc.rumbleTimer, jc.rumbleCurrent.Data, needUpdate
 }
 
 // mu must be held

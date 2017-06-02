@@ -126,6 +126,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		os.Exit(1)
 	}
 	if idx2 == -1 && m.unpaired[idx1].jc.Type() != jcpc.TypeBoth {
+		fmt.Println("pairing single")
 		jc := m.unpaired[idx1].jc
 		c := controller.OneJoyCon(jc)
 		c.BindToOutput(o)
@@ -135,6 +136,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 			jc: []jcpc.JoyCon{jc},
 		})
 	} else if idx2 == -1 {
+		fmt.Println("pairing pro")
 		jc := m.unpaired[idx1].jc
 		c := controller.Pro(jc)
 		c.BindToOutput(o)
@@ -144,6 +146,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 			jc: []jcpc.JoyCon{jc},
 		})
 	} else {
+		fmt.Println("pairing double")
 		jc1 := m.unpaired[idx1].jc
 		jc2 := m.unpaired[idx2].jc
 		var c jcpc.Controller
@@ -173,6 +176,9 @@ func (m *Manager) attemptPairing() {
 		} else if up.curButtons.HasAny(buttonsLZL) {
 		secondloop:
 			for idx2, up2 := range m.unpaired {
+				if idx == idx2 {
+					continue
+				}
 				for _, usedIdx := range didPair {
 					if idx2 == usedIdx {
 						continue secondloop
@@ -294,11 +300,11 @@ outer:
 		var jc jcpc.JoyCon
 		switch dev.ProductId {
 		case jcpc.JOYCON_PRODUCT_L:
-			jc, err = joycon.NewBluetooth(handle, jcpc.TypeLeft)
+			jc, err = joycon.NewBluetooth(handle, jcpc.TypeLeft, m)
 		case jcpc.JOYCON_PRODUCT_R:
-			jc, err = joycon.NewBluetooth(handle, jcpc.TypeRight)
+			jc, err = joycon.NewBluetooth(handle, jcpc.TypeRight, m)
 		case jcpc.JOYCON_PRODUCT_PRO:
-			jc, err = joycon.NewBluetooth(handle, jcpc.TypeBoth)
+			jc, err = joycon.NewBluetooth(handle, jcpc.TypeBoth, m)
 		case jcpc.JOYCON_PRODUCT_CHARGEGRIP:
 			if dev.InterfaceNumber == 1 {
 				handle.Close()
