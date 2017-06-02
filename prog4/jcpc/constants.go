@@ -24,3 +24,15 @@ func (t JoyConType) IsLeft() bool {
 func (t JoyConType) IsRight() bool {
 	return t == TypeRight || t == TypeBoth
 }
+
+func (t JoyConType) String() string {
+	switch t {
+	case TypeLeft:
+		return "Joy-Con L"
+	case TypeRight:
+		return "Joy-Con R"
+	case TypeBoth:
+		return "Switch Pro Controller"
+	}
+	return "X"
+}

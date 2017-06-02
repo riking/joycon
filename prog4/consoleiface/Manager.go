@@ -242,6 +242,7 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon) {
 			}
 		}
 		if up.curButtons.HasAny(diff) {
+			fmt.Println("plonk")
 			// make a sound using jc.Type()
 		}
 	}
@@ -330,6 +331,12 @@ outer:
 		}
 
 		m.unpaired = append(m.unpaired, unpairedController{jc: jc})
+		fmt.Println("[INFO] Connected to", jc.Type(), jc.Serial())
+		go func() {
+			time.Sleep(3*time.Second)
+			fmt.Println("setting player number to 0110")
+			jcpc.SetPlayerLights(jc, 0x06)
+		}()
 	} // range deviceList
 	return nil
 }

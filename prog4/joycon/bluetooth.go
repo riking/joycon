@@ -290,6 +290,7 @@ func (jc *joyconBluetooth) sendRumble(forceUpdate bool) {
 }
 
 func (jc *joyconBluetooth) onReadError(err error) {
+	fmt.Printf("[ ERR] JoyCon %p read error: %v\n", jc, err)
 	jc.mu.Lock()
 	jc.isAlive = false
 	jc.hidHandle.Close()
@@ -385,6 +386,7 @@ func (jc *joyconBluetooth) reader() {
 		}
 
 		packet := buffer[:n]
+		fmt.Println("read packet", packet)
 		switch packet[0] {
 		case 0x21:
 			jc.fillInput(packet)

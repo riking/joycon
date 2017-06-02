@@ -14,10 +14,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
+
 	"github.com/jochenvg/go-udev"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
-	"unsafe"
 )
 
 /*
@@ -74,7 +75,7 @@ func parse_uevent_info(uevent string, bus_type *int, out *DeviceInfo) error {
 			 *        type vendor   product
 			 * HID_ID=0003:000005AC:00008242
 			 **/
-			n, _ := fmt.Sscanf(value, "%x:%hx:%hx", &bus_type, &out.VendorId, &out.ProductId)
+			n, _ := fmt.Sscanf(value, "%x:%x:%x", bus_type, &out.VendorId, &out.ProductId)
 			if n == 3 {
 				found_id = true
 			}
@@ -108,7 +109,6 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 
 	it.Each(func(v_ interface{}) {
 		dev := v_.(*udev.Device)
-		fmt.Println(dev)
 
 		hid_dev := dev.ParentWithSubsystemDevtype("hid", "")
 		if hid_dev == nil {
@@ -206,14 +206,30 @@ func OpenPath(path string) (*Device, error) {
 }
 
 func (dev *Device) Write(p []byte) (n int, err error) {
-	return dev.handle.Write(p)
+	if dev == nil || dev.handle == nil {
+		return -1, os.ErrClosed
+	}
+	n, err = dev.handle.Write(p)
+	if err != nil {
+		if err.Error() == "short write" {
+			return 1, nil
+		}
+	}
+	return n, err
 }
 
 func (dev *Device) Read(p []byte) (n int, err error) {
+	if dev == nil || dev.handle == nil {
+		return -1, os.ErrClosed
+	}
 	return dev.handle.Read(p)
 }
 
 func (dev *Device) SendFeatureReport(data []byte) (int, error) {
+	if dev == nil || dev.handle == nil {
+		return -1, os.ErrClosed
+	}
+
 	ptr := C.malloc(C.size_t(len(data)))
 	defer C.free(ptr)
 
@@ -232,6 +248,10 @@ func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 }
 
 func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, error) {
+	if dev == nil || dev.handle == nil {
+		return nil, os.ErrClosed
+	}
+
 	reportSize := reportDataSize + 1
 	buf := make([]byte, reportSize)
 	buf[0] = reportId
@@ -249,8 +269,13 @@ func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, 
 }
 
 func (dev *Device) Close() error {
-	dev.handle.Close()
+	if dev == nil || dev.handle == nil {
+		return os.ErrClosed
+	}
+
+	h := dev.handle
 	dev.handle = nil
+	h.Close()
 	dev.fd = -1
 	return nil
 }
