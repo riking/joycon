@@ -22,15 +22,15 @@ type JoyCon interface {
 	Reconnect(info *hid.DeviceInfo)
 
 	Buttons() ButtonState
-	Axis(axis AxisID) int16
+	RawSticks(axis AxisID) [2]byte
 	Battery() int8
+	ReadInto(out *CombinedState, includeGyro bool)
 
 	// Valid returns have alpha=255. If alpha=0 the value is not yet available.
 	CaseColor() color.RGBA
 	ButtonColor() color.RGBA
 
 	Rumble(d []RumbleData)
-	SetPlayerLights(pattern byte)
 	SendCustomSubcommand(d []byte)
 
 	OnFrame()
@@ -42,13 +42,8 @@ type Controller interface {
 	JoyConUpdate(JoyCon)
 	BindToOutput(Output)
 
-	// Replace a JoyCon in a Controller.
-	// If a JoyCon already occupies the specified slot, Close() is called on it.
-	// An error is returned if the slot ID does not exist, or this controller does not support replacement (wired pair).
-	SetJoyCon(slot int, jc JoyCon) bool
-
 	// forwards to each JoyCon
-	Rumble(d []*RumbleData)
+	Rumble(d []RumbleData)
 
 	OnFrame()
 
@@ -57,15 +52,27 @@ type Controller interface {
 
 type Output interface {
 	// The Controller should call several *Update() methods followed by Flush().
-	ButtonUpdate(b ButtonState, changed ButtonState)
+	ButtonUpdate(b ButtonID, value bool)
 	StickUpdate(axis int, value int8)
-	GyroUpdate(axis int, value int8)
+	GyroUpdate(axis int, value int16)
 	Flush() error
 
 	OnFrame()
 	Close() error
 }
 
+type OutputFactory interface {
+	New(isSingleJoyCon bool) (Output, error)
+}
+
 type Interface interface {
 	JoyConUpdate(JoyCon)
+}
+
+type CombinedState struct {
+	Gyro [12]int16
+	// [left, right][horizontal, vertical]
+	RawSticks [2][2]uint8
+	Buttons   ButtonState
+	// battery is per joycon, can't be combined
 }

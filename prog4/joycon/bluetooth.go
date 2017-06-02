@@ -41,6 +41,7 @@ type joyconBluetooth struct {
 	battery   int8
 	raw_stick [2][2]byte
 	buttons   jcpc.ButtonState
+	haveGyro  bool
 	gyro      [12]int16
 
 	haveColors  bool
@@ -96,18 +97,41 @@ func (jc *joyconBluetooth) ButtonColor() color.RGBA {
 	return jc.caseColor
 }
 
-func (jc *joyconBluetooth) Axis(axis jcpc.AxisID) int16 {
-	switch axis {
-	case jcpc.Axis_L_Horiz, jcpc.Axis_L_Vertical, jcpc.Axis_R_Horiz, jcpc.Axis_R_Vertical:
-		return 0x80 - int16(jc.raw_stick[axis&2][axis&1])
-	default:
-		return jc.gyro[axis-jcpc.Axis_Orientation_Min]
+func (jc *joyconBluetooth) RawSticks(axis jcpc.AxisID) [2]byte {
+	if axis == jcpc.Axis_L_Horiz || axis == jcpc.Axis_L_Vertical {
+		return jc.raw_stick[0]
+	} else {
+		return jc.raw_stick[1]
 	}
 }
 
-func (jc *joyconBluetooth) SetPlayerLights(pattern byte) {
-	playerNumberCommand := []byte{0x30, byte(pattern)}
-	jc.queueSubcommand(playerNumberCommand)
+func (jc *joyconBluetooth) ReadInto(out *jcpc.CombinedState, includeGyro bool) {
+	jc.mu.Lock()
+	defer jc.mu.Unlock()
+
+	out.Buttons = out.Buttons.Union(jc.buttons)
+	// TODO send CALIBRATED stick data
+	if jc.side.IsLeft() {
+		out.RawSticks[0] = jc.raw_stick[0]
+	}
+	if jc.side.IsRight() {
+		out.RawSticks[1] = jc.raw_stick[1]
+	}
+
+	if includeGyro && jc.haveGyro {
+		out.Gyro = jc.gyro
+	}
+}
+
+func (jc *joyconBluetooth) GyrosInto(buf []int16) bool {
+	jc.mu.Lock()
+	defer jc.mu.Unlock()
+
+	if !jc.haveGyro {
+		return false
+	}
+	copy(buf, jc.gyro[:])
+	return true
 }
 
 func (jc *joyconBluetooth) SendCustomSubcommand(d []byte) {
@@ -257,6 +281,7 @@ func (jc *joyconBluetooth) sendRumble(forceUpdate bool) {
 	packet[1] = timer
 	copy(packet[2:10], data[:])
 	copy(packet[10:], subc)
+	// TODO - writePacket function?
 	_, err := jc.hidHandle.Write(packet[:])
 	if err != nil {
 		jc.onReadError(err)
@@ -326,52 +351,13 @@ func (jc *joyconBluetooth) handleSubcommandReply(_packet []byte) {
 }
 
 func (jc *joyconBluetooth) handleButtonPush(packet []byte) {
-	var bs jcpc.ButtonState
-
 	if jc.mode != modeButtonPush {
 		return
 	}
 
-	// only interested in L/R actually
-	if packet[1]&0x10 != 0 {
-		if jc.side.IsLeft() {
-			bs.Set(jcpc.Button_L_SL, true)
-		} else {
-			bs.Set(jcpc.Button_R_SL, true)
-		}
-	}
-	if packet[1]&0x20 != 0 {
-		if jc.side.IsLeft() {
-			bs.Set(jcpc.Button_L_SR, true)
-		} else {
-			bs.Set(jcpc.Button_R_SR, true)
-		}
-	}
-	if packet[2]&0x40 != 0 {
-		if jc.side.IsLeft() {
-			bs.Set(jcpc.Button_L_L, true)
-		} else {
-			bs.Set(jcpc.Button_R_R, true)
-		}
-	}
-	if packet[2]&0x80 != 0 {
-		if jc.side.IsLeft() {
-			bs.Set(jcpc.Button_L_ZL, true)
-		} else {
-			bs.Set(jcpc.Button_R_ZR, true)
-		}
-	}
-
-	jc.mu.Lock()
-	jc.buttons = bs
-	jc.mu.Unlock()
-
-	if jc.controller != nil {
-		jc.controller.JoyConUpdate(jc)
-	}
-	if jc.ui != nil {
-		jc.ui.JoyConUpdate(jc)
-	}
+	// translating the buttons is too much of a pain
+	// and requires different handling from pro controller
+	jc.queueSubcommand([]byte{0})
 }
 
 func (jc *joyconBluetooth) reader() {

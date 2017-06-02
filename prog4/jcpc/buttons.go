@@ -36,6 +36,35 @@ const (
 	Button_L_ZL
 )
 
+var ButtonList = []ButtonID{
+	Button_R_Y,
+	Button_R_X,
+	Button_R_B,
+	Button_R_A,
+	Button_R_SR,
+	Button_R_SL,
+	Button_R_R,
+	Button_R_ZR,
+
+	Button_Minus,
+	Button_Plus,
+	Button_R_Stick,
+	Button_L_Stick,
+	Button_Home,
+	Button_Capture,
+	Button_Unused1,
+	Button_Unused2,
+
+	Button_L_Down,
+	Button_L_Up,
+	Button_L_Right,
+	Button_L_Left,
+	Button_L_SR,
+	Button_L_SL,
+	Button_L_L,
+	Button_L_ZL,
+}
+
 const (
 	// Stick - uint8 from [0, 255]
 	Axis_L_Vertical = iota
@@ -133,5 +162,21 @@ func (b ButtonState) DiffMask(other ButtonState) ButtonState {
 	result[0] = b[0] ^ other[0]
 	result[1] = b[1] ^ other[1]
 	result[2] = b[2] ^ other[2]
+	return result
+}
+
+func (b ButtonState) HasAll(mask ButtonState) bool {
+	var result bool = true
+	result = result && (b[0]&mask[0]) == mask[0]
+	result = result && (b[1]&mask[1]) == mask[1]
+	result = result && (b[2]&mask[2]) == mask[2]
+	return result
+}
+
+func (b ButtonState) HasAny(mask ButtonState) bool {
+	var result bool = true
+	result = result || (b[0]&mask[0]) != 0
+	result = result || (b[1]&mask[1]) != 0
+	result = result || (b[2]&mask[2]) != 0
 	return result
 }

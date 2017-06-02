@@ -11,16 +11,16 @@ const (
 type JoyConType int
 
 const (
-	JCSideInvalid JoyConType = iota
-	JCSideLeft
-	JCSideRight
-	JCSideBoth
+	TypeInvalid JoyConType = iota
+	TypeLeft
+	TypeRight
+	TypeBoth
 )
 
 func (t JoyConType) IsLeft() bool {
-	return t == JCSideLeft || t == JCSideBoth
+	return t == TypeLeft || t == TypeBoth
 }
 
 func (t JoyConType) IsRight() bool {
-	return t == JCSideRight || t == JCSideBoth
+	return t == TypeRight || t == TypeBoth
 }
