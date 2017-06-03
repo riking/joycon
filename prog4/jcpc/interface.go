@@ -26,6 +26,8 @@ type JoyCon interface {
 	Battery() int8
 	ReadInto(out *CombinedState, includeGyro bool)
 
+	EnableIMU(status bool)
+
 	// Valid returns have alpha=255. If alpha=0 the value is not yet available.
 	CaseColor() color.RGBA
 	ButtonColor() color.RGBA
@@ -69,8 +71,22 @@ type Interface interface {
 	JoyConUpdate(JoyCon)
 }
 
+/*
+gyro data notes
+
+SL/SR on table: [0] =   0, [1] = +15, [2] =   0
+SL/SR up      : [0] =   0, [1] = -15, [2] =   0
+
+buttons up    : [0] =  +1, [1] =   0, [2] = +15
+buttons down  : [0] =  +1, [1] =   0, [2] = -15
+
+shoulder up:  : [0] = +15, [1] =   0, [2] =   0
+shoulder down : [0] = -15, [1] =   0, [2] =   0
+*/
+
 type CombinedState struct {
-	Gyro [12]int16
+	// 3 frames of 6 values
+	Gyro [3][6]int16
 	// [left, right][horizontal, vertical]
 	RawSticks [2][2]uint8
 	Buttons   ButtonState

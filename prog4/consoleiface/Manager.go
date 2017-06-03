@@ -56,7 +56,7 @@ func New(of jcpc.OutputFactory) *Manager {
 
 func (m *Manager) Run() {
 	frameTicker := time.NewTicker(16666 * time.Microsecond)
-	secondTicker := time.NewTimer(1 * time.Second)
+	secondTicker := time.NewTicker(1 * time.Second)
 
 	go m.readStdin()
 
@@ -70,6 +70,20 @@ func (m *Manager) Run() {
 			m.attemptPairing()
 
 		case <-m.consoleExit:
+			fmt.Println("Disconnecting controllers...")
+			for _, cv := range m.paired {
+				cv.c.Close()
+				cv.o.Close()
+				for _, jc := range cv.jc {
+					//jc.Shutdown()
+					jc.Close()
+				}
+			}
+			for _, up := range m.unpaired {
+				//up.jc.Shutdown()
+				up.jc.Close()
+			}
+			time.Sleep(200 * time.Millisecond)
 			return
 		}
 	}
@@ -135,6 +149,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		jc := m.unpaired[idx1].jc
 		c := controller.OneJoyCon(jc)
 		c.BindToOutput(o)
+		jc.BindToController(c)
 		m.paired = append(m.paired, outputController{
 			c:  c,
 			o:  o,
@@ -145,6 +160,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		jc := m.unpaired[idx1].jc
 		c := controller.Pro(jc)
 		c.BindToOutput(o)
+		jc.BindToController(c)
 		m.paired = append(m.paired, outputController{
 			c:  c,
 			o:  o,
@@ -161,12 +177,33 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 			c = controller.TwoJoyCons(jc2, jc1)
 		}
 		c.BindToOutput(o)
+		jc1.BindToController(c)
+		jc2.BindToController(c)
 		m.paired = append(m.paired, outputController{
 			c:  c,
 			o:  o,
 			jc: []jcpc.JoyCon{jc1, jc2},
 		})
 	}
+	m.fixPlayerLights()
+}
+
+func (m *Manager) fixPlayerLights() {
+
+	// Fix player lights
+	for i, c := range m.paired {
+		for _, jc := range c.jc {
+			jcpc.SetPlayerLights(jc, (1<<uint(i+1))-1)
+		}
+	}
+
+	for i, up := range m.unpaired {
+		jcpc.SetPlayerLights(up.jc, byte((i+1)<<4))
+	}
+}
+
+func (m *Manager) removeFromUnpaired_Locked(idx int) {
+	m.unpaired = append(m.unpaired[:idx], m.unpaired[idx+1:]...)
 }
 
 func (m *Manager) attemptPairing() {
@@ -199,18 +236,11 @@ func (m *Manager) attemptPairing() {
 	}
 
 	if len(didPair) > 0 {
-		newUnpaired := make([]unpairedController, len(m.unpaired)-len(didPair))
 		sort.Ints(didPair)
-		i := 0
-		k := 0
-		for j, v := range m.unpaired {
-			if j == didPair[k] {
-				k++
-			} else {
-				newUnpaired[i] = v
-				i++
-			}
+		if len(didPair) > 1 {
+			m.removeFromUnpaired_Locked(didPair[1])
 		}
+		m.removeFromUnpaired_Locked(didPair[0])
 	}
 }
 
@@ -242,6 +272,12 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon) {
 		}
 	}
 	if idx != -1 {
+		if jc.IsStopping() {
+			fmt.Println("removing", jc.Serial())
+			m.removeFromUnpaired_Locked(idx)
+			return
+		}
+
 		up := &m.unpaired[idx]
 		up.prevButtons = up.curButtons
 		up.curButtons = jc.Buttons()
@@ -260,7 +296,6 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon) {
 }
 
 func (m *Manager) SearchDevices() error {
-	fmt.Println("Scanning...")
 	deviceList, err := hid.Enumerate(jcpc.VENDOR_NINTENDO, 0)
 	if err != nil {
 		fmt.Println("Enumeration error:", err)
@@ -347,11 +382,7 @@ outer:
 
 		m.unpaired = append(m.unpaired, unpairedController{jc: jc})
 		fmt.Println("[INFO] Connected to", jc.Type(), jc.Serial())
-		go func() {
-			time.Sleep(3 * time.Second)
-			fmt.Println("setting player number to 0110")
-			jcpc.SetPlayerLights(jc, 0x18)
-		}()
 	} // range deviceList
+	m.fixPlayerLights()
 	return nil
 }

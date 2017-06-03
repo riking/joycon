@@ -31,7 +31,7 @@ func (c *consoleOutput) ButtonUpdate(bu jcpc.ButtonID, state bool) {
 	if !state {
 		pressed = "released"
 	}
-	fmt.Printf("[%d] %s %s\n", c.i, bu.String(), pressed)
+	fmt.Printf("[Controller %d] %s %s\n", c.i, bu.String(), pressed)
 }
 
 func (c *consoleOutput) StickUpdate(axis int, value int8) {

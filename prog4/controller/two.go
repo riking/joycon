@@ -2,7 +2,6 @@ package controller
 
 import (
 	"sync"
-
 	"time"
 
 	"github.com/riking/joycon/prog4/jcpc"
@@ -78,4 +77,5 @@ func (c *two) updateBoth() {
 	for i := 0; i < 4; i++ {
 
 	}
+	c.output.Flush()
 }

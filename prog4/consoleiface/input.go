@@ -196,8 +196,11 @@ var _ = addCommand(cmdHelp, "Display this help text.", "help", "?", "hlep")
 var _ = addCommand(cmdList, "Show the names of all Joy-Cons connected to the system.", "list", "ls")
 var _ = addCommand(cmdRecheck, "Recheck for JoyCons connected by the system.", "rescan", "recheck")
 var _ = addCommand(cmdDisconnect, "Disconnect the specified JoyCon.", "disconnect")
+var _ = addCommand(cmdDisconnectAll, "Disconnect all JoyCons.", "disconnectall")
 var _ = addCommand(cmdSetPlayerLights, "Set the player lights on the JoyCon", "setPlayerLights")
 var _ = addCommand(cmdSetHomeLights, "Set the home light pattern.", "setHomeLights")
+var _ = addCommand(cmdEnableIMU, "Enable/disable IMU.", "imu")
+var _ = addCommand(cmdCustomSend, "Send a subcommand packet.", "send")
 
 func cmdList(m *Manager, argv []string) {
 	printConnectedJoyCons(m)
@@ -265,4 +268,69 @@ func cmdSetHomeLights(m *Manager, argv []string) {
 	}
 
 	jcpc.SetHomeLightPulse(jc, pattern)
+}
+
+func cmdEnableIMU(m *Manager, argv []string) {
+	jc, argv, err := selectJoyCon(m, argv)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if len(argv) == 0 {
+		fmt.Println("specify on/off true/false")
+	}
+
+	enable := false
+	switch argv[0] {
+	case "on", "1", "true", "enable":
+		enable = true
+	}
+
+	jc.EnableIMU(enable)
+}
+
+func cmdCustomSend(m *Manager, argv []string) {
+	jc, argv, err := selectJoyCon(m, argv)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if len(argv) == 0 {
+		fmt.Println("must specify a value: send [jc] 0x8 0xFF ...")
+		return
+	}
+
+	pattern := make([]byte, len(argv))
+	for i := range pattern {
+		val, err := strconv.ParseUint(argv[i], 0, 8)
+		if err != nil {
+			fmt.Println("invalid number", argv[i], err)
+		}
+		pattern[i] = byte(val)
+	}
+
+	jc.SendCustomSubcommand(pattern)
+}
+
+func cmdDisconnectAll(m *Manager, argv []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, c := range m.paired {
+		c.c.Close()
+		c.o.Close()
+		for _, jc := range c.jc {
+			jc.Shutdown()
+			jc.Close()
+		}
+	}
+	for _, up := range m.unpaired {
+		up.jc.Shutdown()
+		up.jc.Close()
+	}
+	m.paired = nil
+	m.unpaired = nil
+	fmt.Println("Disconnected all.")
 }

@@ -418,7 +418,6 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 	if (hid_init() < 0)
 		return NULL;
 
-	printf("[hidapi DEBUG] passed init\n");
 	/* give the IOHIDManager a chance to update itself */
 	process_pending_events();
 
@@ -431,7 +430,6 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 	IOHIDDeviceRef *device_array = calloc(num_devices, sizeof(IOHIDDeviceRef));
 	CFSetGetValues(device_set, (const void **) device_array);
 
-	printf("num_devices: %ld\n", num_devices);
 	/* Iterate over each device, making an entry for it. */
 	for (i = 0; i < num_devices; i++) {
 		unsigned short dev_vid;
@@ -448,7 +446,6 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 		dev_vid = get_vendor_id(dev);
 		dev_pid = get_product_id(dev);
 
-		printf("device: %hx %hx\n", dev_vid, dev_pid);
 		/* Check the VID/PID against the arguments */
 		if ((vendor_id == 0x0 || vendor_id == dev_vid) &&
 		    (product_id == 0x0 || product_id == dev_pid)) {
