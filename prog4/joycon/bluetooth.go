@@ -106,7 +106,7 @@ func (jc *joyconBluetooth) EnableIMU(status bool) {
 	}
 
 	jc.mu.Lock()
-	jc.haveGyro = true
+	jc.haveGyro = status
 	jc.subcommandQueue = append(jc.subcommandQueue, subcommand)
 	jc.mu.Unlock()
 }
@@ -472,6 +472,10 @@ func (jc *joyconBluetooth) reader() {
 		}
 
 		packet := buffer[:n]
+		if len(packet) == 0 {
+			continue
+		}
+
 		fmt.Println("read packet", packet)
 		switch packet[0] {
 		case 0x21:

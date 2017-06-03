@@ -194,15 +194,15 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 // Open hid by path.
 // Returns a *Device and an error
 func OpenPath(path string) (*Device, error) {
-	fd, err := unix.Open(path, unix.O_RDWR | unix.O_NONBLOCK, 0)
+	fd, err := unix.Open(path, unix.O_RDWR|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	pollFd, err := unix.EpollCreate(0)
+	pollFd, err := unix.EpollCreate1(0)
 	if err != nil {
 		unix.Close(fd)
-		return nil, err
+		return nil, errors.Wrap(err, "epoll_create")
 	}
 	err = unix.EpollCtl(pollFd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{
 		Events: unix.EPOLLIN | unix.EPOLLOUT,
@@ -210,12 +210,12 @@ func OpenPath(path string) (*Device, error) {
 	if err != nil {
 		unix.Close(pollFd)
 		unix.Close(fd)
-		return nil, err
+		return nil, errors.Wrap(err, "epoll_ctl")
 	}
 
 	return &Device{
-		epoll:  pollFd,
-		fd:     fd,
+		epoll: pollFd,
+		fd:    fd,
 	}, nil
 }
 
@@ -229,14 +229,14 @@ func (dev *Device) Write(p []byte) (n int, err error) {
 		if err == unix.EAGAIN {
 			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
 				Events: unix.EPOLLOUT,
-				Fd: int32(dev.fd),
+				Fd:     int32(dev.fd),
 			}}, 1)
 			if pErr != nil {
 				fmt.Println("poll error:", pErr)
 			}
 			continue
 		} else if err != nil {
-			return n, os.PathError{Err: err, Op: "write", Path: dev.serial}
+			return n, &os.PathError{Err: err, Op: "write", Path: dev.serial}
 		}
 		return n, err
 	}
@@ -253,14 +253,14 @@ func (dev *Device) Read(p []byte) (n int, err error) {
 		if err == unix.EAGAIN {
 			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
 				Events: unix.EPOLLIN,
-				Fd: int32(dev.fd),
+				Fd:     int32(dev.fd),
 			}}, 16)
 			if pErr != nil {
 				fmt.Println("poll error:", pErr)
 			}
 			continue
 		} else if err != nil {
-			return n, os.PathError{Err: err, Op: "read", Path: dev.serial}
+			return n, &os.PathError{Err: err, Op: "read", Path: dev.serial}
 		}
 		return n, err
 	}
