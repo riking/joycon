@@ -3,6 +3,7 @@ package hid
 import (
 	"errors"
 	"sync"
+	"fmt"
 )
 
 var errNotImplemented = errors.New("not implemented yet")
@@ -61,3 +62,16 @@ type DeviceInfoList []*DeviceInfo
 
 var initOnce sync.Once
 
+
+type wrapError struct {
+	w   error
+	ctx string
+}
+
+func (w wrapError) Cause() error {
+	return w.w
+}
+
+func (w wrapError) Error() string {
+	return fmt.Sprintf("%s: %v", w.ctx, w.w)
+}

@@ -38,19 +38,6 @@ func (di *DeviceInfo) Device() (*Device, error) {
 	return OpenPath(di.Path)
 }
 
-type wrapError struct {
-	w   error
-	ctx string
-}
-
-func (w wrapError) Cause() error {
-	return w.w
-}
-
-func (w wrapError) Error() string {
-	return fmt.Sprintf("%s: %v", w.ctx, w.w)
-}
-
 // /** @brief Initialize the HIDAPI library.
 //
 //  This function initializes the HIDAPI library. Calling it is not

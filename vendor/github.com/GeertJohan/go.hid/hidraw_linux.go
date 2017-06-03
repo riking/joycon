@@ -9,7 +9,6 @@ package hid
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -37,8 +36,9 @@ int get_ioctl_get_feature(int length) {
 import "C"
 
 type Device struct {
-	handle io.ReadWriteCloser
+	epoll  int
 	fd     int
+	closed bool
 
 	serial      string
 	productName string
@@ -194,39 +194,81 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 // Open hid by path.
 // Returns a *Device and an error
 func OpenPath(path string) (*Device, error) {
-	file, err := unix.Open(path, unix.O_RDWR, 0)
+	fd, err := unix.Open(path, unix.O_RDWR | unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
 
+	pollFd, err := unix.EpollCreate(0)
+	if err != nil {
+		unix.Close(fd)
+		return nil, err
+	}
+	err = unix.EpollCtl(pollFd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{
+		Events: unix.EPOLLIN | unix.EPOLLOUT,
+	})
+	if err != nil {
+		unix.Close(pollFd)
+		unix.Close(fd)
+		return nil, err
+	}
+
 	return &Device{
-		handle: os.NewFile(uintptr(file), path),
-		fd:     file,
+		epoll:  pollFd,
+		fd:     fd,
 	}, nil
 }
 
 func (dev *Device) Write(p []byte) (n int, err error) {
-	if dev == nil || dev.handle == nil {
+	if dev == nil || dev.closed {
 		return -1, os.ErrClosed
 	}
-	n, err = dev.handle.Write(p)
-	if err != nil {
-		if err.Error() == "short write" {
-			return 1, nil
+
+	for attempts := 4; attempts > 0; attempts-- {
+		n, err = unix.Write(dev.fd, p)
+		if err == unix.EAGAIN {
+			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
+				Events: unix.EPOLLOUT,
+				Fd: int32(dev.fd),
+			}}, 1)
+			if pErr != nil {
+				fmt.Println("poll error:", pErr)
+			}
+			continue
+		} else if err != nil {
+			return n, os.PathError{Err: err, Op: "write", Path: dev.serial}
 		}
+		return n, err
 	}
-	return n, err
+	return -1, err
 }
 
 func (dev *Device) Read(p []byte) (n int, err error) {
-	if dev == nil || dev.handle == nil {
+	if dev == nil || dev.closed {
 		return -1, os.ErrClosed
 	}
-	return dev.handle.Read(p)
+
+	for attempts := 4; attempts > 0; attempts-- {
+		n, err = unix.Read(dev.fd, p)
+		if err == unix.EAGAIN {
+			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
+				Events: unix.EPOLLIN,
+				Fd: int32(dev.fd),
+			}}, 16)
+			if pErr != nil {
+				fmt.Println("poll error:", pErr)
+			}
+			continue
+		} else if err != nil {
+			return n, os.PathError{Err: err, Op: "read", Path: dev.serial}
+		}
+		return n, err
+	}
+	return 0, nil
 }
 
 func (dev *Device) SendFeatureReport(data []byte) (int, error) {
-	if dev == nil || dev.handle == nil {
+	if dev == nil || dev.closed {
 		return -1, os.ErrClosed
 	}
 
@@ -248,7 +290,7 @@ func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 }
 
 func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, error) {
-	if dev == nil || dev.handle == nil {
+	if dev == nil || dev.closed {
 		return nil, os.ErrClosed
 	}
 
@@ -268,15 +310,34 @@ func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, 
 	return buf, nil
 }
 
+// In non-blocking mode calls to hid_read() will return immediately with a value of 0 if there is no data to be read.
+// In blocking mode, hid_read() will wait (block) until there is data to read before returning.
+func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
+	state := uintptr(0)
+	if nonblocking {
+		state = 1
+	}
+	status, _, err := unix.Syscall6(syscall.SYS_IOCTL,
+		uintptr(dev.fd),
+		uintptr(unix.F_SETFL),
+		uintptr(unix.O_NONBLOCK),
+		state,
+		0, 0)
+
+	if status != 0 {
+		return err
+	}
+	return nil
+}
+
 func (dev *Device) Close() error {
-	if dev == nil || dev.handle == nil {
+	if dev == nil || dev.closed {
 		return os.ErrClosed
 	}
 
-	h := dev.handle
-	dev.handle = nil
-	h.Close()
-	dev.fd = -1
+	unix.Close(dev.fd)
+	unix.Close(dev.epoll)
+	dev.closed = true
 	return nil
 }
 
@@ -286,13 +347,4 @@ func (dev *Device) SerialNumberString() (string, error) {
 
 func (dev *Device) GetIndexedString(index int) (string, error) {
 	return "", errors.New("Not supported on Linux")
-}
-
-// In non-blocking mode calls to hid_read() will return immediately with a value of 0 if there is no data to be read.
-// In blocking mode, hid_read() will wait (block) until there is data to read before returning.
-//
-// On Linux, SetReadWriteNonBlocking is ignored because the Read/Write calls are dispatched by the Go runtime,
-// so handle concurrency correctly.
-func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
-	return nil
 }
