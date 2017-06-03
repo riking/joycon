@@ -2,6 +2,7 @@ package main
 
 import (
 	"runtime"
+
 	"github.com/riking/joycon/prog4/consoleiface"
 	"github.com/riking/joycon/prog4/output"
 )

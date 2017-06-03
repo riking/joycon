@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -37,35 +36,41 @@ type Manager struct {
 
 	commandChan      chan string
 	attemptPairingCh chan struct{}
+	consoleExit      chan struct{}
 
 	// flags to set for the main loop
 	doAttemptPairing bool
 }
 
 func New(of jcpc.OutputFactory) *Manager {
-	return &Manager{
+	m := &Manager{
 		outputFactory: of,
 
 		commandChan:      make(chan string, 1),
 		attemptPairingCh: make(chan struct{}, 1),
+		consoleExit:      make(chan struct{}),
 	}
+
+	return m
 }
 
 func (m *Manager) Run() {
 	frameTicker := time.NewTicker(16666 * time.Microsecond)
 	secondTicker := time.NewTimer(1 * time.Second)
+
+	go m.readStdin()
+
 	for {
 		select {
 		case <-frameTicker.C:
 			m.OnFrame()
 		case <-secondTicker.C:
 			m.SearchDevices()
-		case cmd := <-m.commandChan:
-			// TODO
-			argv := strings.Fields(cmd)
-			_ = argv
 		case <-m.attemptPairingCh:
 			m.attemptPairing()
+
+		case <-m.consoleExit:
+			return
 		}
 	}
 }
@@ -255,6 +260,7 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon) {
 }
 
 func (m *Manager) SearchDevices() error {
+	fmt.Println("Scanning...")
 	deviceList, err := hid.Enumerate(jcpc.VENDOR_NINTENDO, 0)
 	if err != nil {
 		fmt.Println("Enumeration error:", err)
@@ -325,23 +331,26 @@ outer:
 			if handleR == nil {
 				// must have both to be recognized
 				handle.Close()
-				continue
+				break
 			}
 			jc, err = joycon.NewChargeGrip(handle, handleR)
 			if err != nil {
 				handleR.Close()
+				break
 			}
 		}
 		if err != nil {
 			handle.Close()
+			fmt.Println("Couldn't initialize JoyCon:", err)
+			continue outer
 		}
 
 		m.unpaired = append(m.unpaired, unpairedController{jc: jc})
 		fmt.Println("[INFO] Connected to", jc.Type(), jc.Serial())
 		go func() {
-			time.Sleep(3*time.Second)
+			time.Sleep(3 * time.Second)
 			fmt.Println("setting player number to 0110")
-			jcpc.SetPlayerLights(jc, 0x06)
+			jcpc.SetPlayerLights(jc, 0x18)
 		}()
 	} // range deviceList
 	return nil

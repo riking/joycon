@@ -10,7 +10,7 @@ type consoleOutput struct {
 	i int
 }
 
-type consoleFactory struct{
+type consoleFactory struct {
 	i int
 }
 

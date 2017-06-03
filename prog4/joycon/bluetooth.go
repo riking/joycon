@@ -59,7 +59,7 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 	var err error
 	jc := &joyconBluetooth{
 		hidHandle: hidHandle,
-		ui: ui,
+		ui:        ui,
 	}
 	jc.serial, err = hidHandle.SerialNumberString()
 	if err != nil {
@@ -70,7 +70,7 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 	jc.haveColors = false
 	jc.mode = modeButtonPush
 	jc.isAlive = true
-	
+
 	go jc.reader()
 	return jc, nil
 }
