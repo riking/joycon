@@ -1,20 +1,55 @@
 package controller
 
-import "github.com/riking/joycon/prog4/jcpc"
+import (
+	"sync"
+	"time"
 
-type oneJoyConController struct {
+	"github.com/riking/joycon/prog4/jcpc"
+)
+
+type one struct {
 	base
 
-	only        jcpc.JoyCon
-	out         jcpc.Output
-	prevButtons jcpc.ButtonState
+	mu    sync.Mutex
+	jc jcpc.JoyCon
+
+	lastUpdate time.Time
+
+	prevBattery int8
 }
 
-func OneJoyCon(jc jcpc.JoyCon) jcpc.Controller {
-	//return &oneJoyConController{only: jc}
-	panic("notImplemented")
+func OneJoyCon(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
+	return &one{
+		jc: jc,
+		base: base{
+			ui: ui,
+		},
+	}
 }
 
-func Pro(jc jcpc.JoyCon) jcpc.Controller {
-	panic("notImplemented")
+func (c *one) Rumble(data []jcpc.RumbleData) {
+	c.jc.Rumble(data)
+}
+
+func (c *one) JoyConUpdate(jc jcpc.JoyCon, flags int) {
+	if flags & jcpc.NotifyInput != 0 {
+		c.update()
+	}
+
+	if flags & jcpc.NotifyConnection != 0 {
+		if jc.IsStopping() {
+			c.ui.RemoveController(c)
+		}
+	}
+}
+
+func (c *one) update() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.prevState = c.curState
+	c.curState = jcpc.CombinedState{}
+	c.jc.ReadInto(&c.curState, true)
+
+	c.dispatchUpdates()
 }

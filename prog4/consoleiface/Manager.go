@@ -147,7 +147,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 	if idx2 == -1 && m.unpaired[idx1].jc.Type() != jcpc.TypeBoth {
 		fmt.Println("pairing single")
 		jc := m.unpaired[idx1].jc
-		c := controller.OneJoyCon(jc)
+		c := controller.OneJoyCon(jc, m)
 		c.BindToOutput(o)
 		jc.BindToController(c)
 		m.paired = append(m.paired, outputController{
@@ -158,7 +158,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 	} else if idx2 == -1 {
 		fmt.Println("pairing pro")
 		jc := m.unpaired[idx1].jc
-		c := controller.Pro(jc)
+		c := controller.Pro(jc, m)
 		c.BindToOutput(o)
 		jc.BindToController(c)
 		m.paired = append(m.paired, outputController{
@@ -172,9 +172,9 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		jc2 := m.unpaired[idx2].jc
 		var c jcpc.Controller
 		if jc1.Type().IsLeft() {
-			c = controller.TwoJoyCons(jc1, jc2)
+			c = controller.TwoJoyCons(jc1, jc2, m)
 		} else {
-			c = controller.TwoJoyCons(jc2, jc1)
+			c = controller.TwoJoyCons(jc2, jc1, m)
 		}
 		c.BindToOutput(o)
 		jc1.BindToController(c)
@@ -189,7 +189,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 }
 
 func (m *Manager) fixPlayerLights() {
-
+	// TODO separate business logic and moving arrays around
 	// Fix player lights
 	for i, c := range m.paired {
 		for _, jc := range c.jc {
@@ -244,54 +244,71 @@ func (m *Manager) attemptPairing() {
 	}
 }
 
-func (m *Manager) JoyConUpdate(jc jcpc.JoyCon) {
+func (m *Manager) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	idx := -1
-	for i, aJC := range m.wantReconnect {
-		if jc == aJC {
-			idx = i
-			break
-		}
-	}
-	if !jc.WantsReconnect() != (idx == -1) {
-		if idx == -1 {
-			m.wantReconnect = append(m.wantReconnect, jc)
-			fmt.Printf("JoyCon %s needs reconnecting\n", jc.Serial())
-		} else {
-			m.wantReconnect = append(m.wantReconnect[:idx], m.wantReconnect[idx+1:]...)
-		}
-	}
-
-	idx = -1
-	for i, v := range m.unpaired {
-		if jc == v.jc {
-			idx = i
-			break
-		}
-	}
-	if idx != -1 {
-		if jc.IsStopping() {
-			fmt.Println("removing", jc.Serial())
-			m.removeFromUnpaired_Locked(idx)
-			return
-		}
-
-		up := &m.unpaired[idx]
-		up.prevButtons = up.curButtons
-		up.curButtons = jc.Buttons()
-		diff := up.curButtons.DiffMask(up.prevButtons)
-		if diff.HasAny(buttonsAnyLR) {
-			select {
-			case m.attemptPairingCh <- struct{}{}:
-			default:
+	if flags & jcpc.NotifyConnection != 0 {
+		idx := -1
+		for i, aJC := range m.wantReconnect {
+			if jc == aJC {
+				idx = i
+				break
 			}
 		}
-		if up.curButtons.HasAny(diff) {
-			fmt.Println("plonk")
-			// make a sound using jc.Type()
+		if !jc.WantsReconnect() != (idx == -1) {
+			if idx == -1 {
+				m.wantReconnect = append(m.wantReconnect, jc)
+				fmt.Printf("JoyCon %s needs reconnecting\n", jc.Serial())
+			} else {
+				m.wantReconnect = append(m.wantReconnect[:idx], m.wantReconnect[idx+1:]...)
+			}
 		}
+
+		idx = -1
+		for i, v := range m.unpaired {
+			if jc == v.jc {
+				idx = i
+				break
+			}
+		}
+		if idx != -1 {
+			if jc.IsStopping() {
+				fmt.Println("removing", jc.Serial())
+				m.removeFromUnpaired_Locked(idx)
+				return
+			}
+		}
+	}
+
+	if flags & jcpc.NotifyInput != 0 {
+		idx := -1
+		for i, v := range m.unpaired {
+			if jc == v.jc {
+				idx = i
+				break
+			}
+		}
+		if idx != -1 {
+			up := &m.unpaired[idx]
+			up.prevButtons = up.curButtons
+			up.curButtons = jc.Buttons()
+			diff := up.curButtons.DiffMask(up.prevButtons)
+			if diff.HasAny(buttonsAnyLR) {
+				select {
+				case m.attemptPairingCh <- struct{}{}:
+				default:
+				}
+			}
+			if up.curButtons.HasAny(diff) {
+				fmt.Println("plonk")
+				// make a sound on the ui?
+			}
+		}
+	}
+
+	if flags & jcpc.NotifyBattery != 0 {
+		fmt.Printf("%s (%s): %s\n", jc.Type().String(), jc.Serial(), renderBattery(jc.Battery()))
 	}
 }
 
@@ -385,4 +402,27 @@ outer:
 	} // range deviceList
 	m.fixPlayerLights()
 	return nil
+}
+
+func (m *Manager) RemoveController(c jcpc.Controller) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	idx := -1
+	for i, v := range m.paired {
+		if v.c == c {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return
+	}
+	v := m.paired[idx]
+	m.paired = append(m.paired[:idx], m.paired[idx+1:]...)
+	v.c.Close()
+	v.o.Close()
+	for _, jc := range v.jc {
+		jc.Close()
+	}
 }

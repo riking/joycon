@@ -10,6 +10,7 @@ import (
 
 	"github.com/GeertJohan/go.hid"
 	"github.com/riking/joycon/prog4/jcpc"
+	"context"
 )
 
 const (
@@ -42,7 +43,7 @@ type joyconBluetooth struct {
 	raw_stick [2][2]byte
 	buttons   jcpc.ButtonState
 	haveGyro  bool
-	gyro      [3][6]int16 // 3 frames of 6 values
+	gyro      [3]jcpc.GyroFrame
 
 	haveColors  bool
 	caseColor   color.RGBA
@@ -53,6 +54,8 @@ type joyconBluetooth struct {
 	rumbleTimer   byte
 
 	subcommandQueue [][]byte
+
+	spiReads []spiReadCallback
 }
 
 func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface) (jcpc.JoyCon, error) {
@@ -148,6 +151,41 @@ func (jc *joyconBluetooth) Rumble(d []jcpc.RumbleData) {
 	jc.rumbleQueue = append(jc.rumbleQueue, d...)
 }
 
+func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
+	cmd := []byte{0, 0, 0, 0, len}
+	ch := make(chan []byte)
+	chE := make(chan error)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	binary.LittleEndian.PutUint32(cmd[0:], addr)
+
+	jc.mu.Lock()
+	jc.subcommandQueue = append(jc.subcommandQueue, cmd)
+	jc.spiReads = append(jc.spiReads, spiReadCallback{
+		F: func(b []byte, e error) {
+			if b != nil {
+				ch <- b
+			} else {
+				chE <- e
+			}
+		},
+		Ctx: ctx,
+		address: addr,
+		size: len,
+	})
+	jc.mu.Unlock()
+
+	select {
+	case data := <-ch:
+		return data, nil
+	case err := <-chE:
+		return nil, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func (jc *joyconBluetooth) BindToController(c jcpc.Controller) {
 	jc.mu.Lock()
 	jc.controller = c
@@ -179,13 +217,6 @@ func (jc *joyconBluetooth) Shutdown() {
 	packet[0] = 1
 	packet[10] = 6
 
-	if jc.ui != nil {
-		defer jc.ui.JoyConUpdate(jc)
-	}
-	if jc.controller != nil {
-		defer jc.controller.JoyConUpdate(jc)
-	}
-
 	jc.mu.Lock()
 	defer jc.mu.Unlock()
 
@@ -196,6 +227,7 @@ func (jc *joyconBluetooth) Shutdown() {
 	jc.hidHandle = nil
 	jc.isShutdown = true
 	jc.isAlive = false
+	go notify(jc, jcpc.NotifyConnection, jc.ui, jc.controller)
 }
 
 func (jc *joyconBluetooth) Reconnect(dev *hid.DeviceInfo) {
@@ -218,6 +250,7 @@ func (jc *joyconBluetooth) Reconnect(dev *hid.DeviceInfo) {
 	jc.hidHandle = handle
 	jc.isAlive = true
 	go jc.reader()
+	go notify(jc, jcpc.NotifyConnection, jc.ui, jc.controller)
 }
 
 func (jc *joyconBluetooth) Close() error {
@@ -230,6 +263,7 @@ func (jc *joyconBluetooth) Close() error {
 	jc.isAlive = false
 	jc.isShutdown = true
 	jc.hidHandle = nil
+	go notify(jc, jcpc.NotifyConnection, jc.ui, jc.controller)
 	return nil
 }
 
@@ -241,14 +275,15 @@ func (jc *joyconBluetooth) queueSubcommand(data []byte) {
 
 // OnFrame triggers writes - this way they're rate-limited
 func (jc *joyconBluetooth) OnFrame() {
-	doNothing := false
+	sendingCommand := true
 	jc.mu.Lock()
 	if !jc.isAlive || jc.isShutdown {
-		doNothing = true
+		sendingCommand = false
 	}
+
 	jc.mu.Unlock()
 
-	if doNothing {
+	if !sendingCommand {
 		return
 	}
 
@@ -319,6 +354,7 @@ func (jc *joyconBluetooth) sendRumble(forceUpdate bool) {
 	copy(packet[2:10], data[:])
 	copy(packet[10:], subc)
 	// TODO - writePacket function?
+	// TODO SetWriteDeadline
 	_, err := jc.hidHandle.Write(packet[:])
 	if err != nil {
 		jc.onReadError(err)
@@ -340,18 +376,24 @@ func (jc *joyconBluetooth) onReadError(err error) {
 
 	fmt.Printf("[ ERR] JoyCon %p read error: %v\n", jc, err)
 
-	if jc.ui != nil {
-		jc.ui.JoyConUpdate(jc)
-	}
+	go notify(jc, jcpc.NotifyConnection, jc.ui, jc.controller)
 }
 
 func (jc *joyconBluetooth) fillInput(packet []byte) {
 	jc.mu.Lock()
 
 	packet = packet[1:]
-	jc.battery = int8((packet[1] & 0xF0) >> 4)
-	newButtons := jcpc.ButtonsFromSlice(packet[2:5])
-	jc.buttons = newButtons
+
+	// timer := packet[0]
+	newBattery := int8((packet[1] & 0xF0) >> 4)
+	batteryChanged := jc.battery != newBattery
+	jc.battery = newBattery
+	if batteryChanged {
+		go jc.ui.JoyConUpdate(jc, jcpc.NotifyBattery)
+	}
+
+	jc.buttons = jcpc.ButtonsFromSlice(packet[2:5])
+
 	if jc.side.IsLeft() {
 		jc.raw_stick[0][0] = ((packet[6] & 0x0F) << 4) | ((packet[5] & 0xF0) >> 4)
 		jc.raw_stick[0][1] = packet[7]
@@ -360,19 +402,9 @@ func (jc *joyconBluetooth) fillInput(packet []byte) {
 		jc.raw_stick[1][0] = ((packet[9] & 0x0F) << 4) | ((packet[8] & 0xF0) >> 4)
 		jc.raw_stick[1][1] = packet[10]
 	}
-	// packet[11]
+	// ?? packet[11]
 
-	cont := jc.controller
-	ui := jc.ui
 	jc.mu.Unlock()
-
-	// TODO move
-	if cont != nil {
-		cont.JoyConUpdate(jc)
-	}
-	if ui != nil {
-		ui.JoyConUpdate(jc)
-	}
 }
 
 func gyroDiff(prevFrame, curFrame [6]int16) [6]int16 {
@@ -481,12 +513,15 @@ func (jc *joyconBluetooth) reader() {
 		case 0x21:
 			jc.fillInput(packet)
 			jc.handleSubcommandReply(packet)
+			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		case 0x30:
 			jc.fillInput(packet)
 			jc.fillGyroData(packet)
+			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		case 0x31, 0x32, 0x33:
 			jc.fillInput(packet)
 			jc.handleSubcommandReply(packet)
+			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		case 0x3F:
 			jc.handleButtonPush(packet)
 		default:
@@ -513,9 +548,22 @@ func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
 		jc.buttonColor.B = data[5]
 		jc.buttonColor.A = 255
 		jc.mu.Unlock()
-	} else {
-		fmt.Printf("SPI flash read @%X len=%d\n%v\n", addr, length, data)
 	}
+	// TODO stick calibration
 
-	// TODO callbacks
+	jc.mu.Lock()
+	k := 0
+	// SliceDeletion
+	for i, v := range jc.spiReads {
+		if v.address == addr && v.size == length {
+			go v.F(data, nil)
+		} else {
+			if i != k {
+				jc.spiReads[k] = v
+			}
+			k++
+		}
+	}
+	jc.spiReads = jc.spiReads[:k]
+	jc.mu.Unlock()
 }
