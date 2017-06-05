@@ -171,9 +171,9 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		c.BindToOutput(o)
 		jc.BindToController(c)
 		m.paired = append(m.paired, outputController{
-			c:  c,
-			o:  o,
-			jc: []jcpc.JoyCon{jc},
+			c:    c,
+			o:    o,
+			jc:   []jcpc.JoyCon{jc},
 			pNum: pNum,
 		})
 	} else if idx2 == -1 {
@@ -188,9 +188,9 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		c.BindToOutput(o)
 		jc.BindToController(c)
 		m.paired = append(m.paired, outputController{
-			c:  c,
-			o:  o,
-			jc: []jcpc.JoyCon{jc},
+			c:    c,
+			o:    o,
+			jc:   []jcpc.JoyCon{jc},
 			pNum: pNum,
 		})
 	} else {
@@ -212,9 +212,9 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		jc1.BindToController(c)
 		jc2.BindToController(c)
 		m.paired = append(m.paired, outputController{
-			c:  c,
-			o:  o,
-			jc: []jcpc.JoyCon{jc1, jc2},
+			c:    c,
+			o:    o,
+			jc:   []jcpc.JoyCon{jc1, jc2},
 			pNum: pNum,
 		})
 	}

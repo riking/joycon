@@ -185,7 +185,6 @@ func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
 		}
 	}
 
-
 	n, err := C.write_uinput_setup(&setup, C.int(o.fd))
 	if err != nil {
 		return errors.Wrap(err, "write uinput_user_dev")
@@ -265,7 +264,7 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 	}
 
 	go func() {
-		time.Sleep(250*time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 		err = o.setPermissions()
 		if err != nil {
 			fmt.Println("[WARN] Failed to set permissions:", err)

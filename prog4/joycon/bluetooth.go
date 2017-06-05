@@ -169,13 +169,13 @@ func (jc *joyconBluetooth) Rumble(d []jcpc.RumbleData) {
 }
 
 func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
-	cmd := []byte{0, 0, 0, 0, len}
+	cmd := []byte{0x10, 0, 0, 0, 0, len}
 	ch := make(chan []byte)
 	chE := make(chan error)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	binary.LittleEndian.PutUint32(cmd[0:], addr)
+	binary.LittleEndian.PutUint32(cmd[1:], addr)
 
 	jc.mu.Lock()
 	jc.subcommandQueue = append(jc.subcommandQueue, cmd)
@@ -463,15 +463,21 @@ func (jc *joyconBluetooth) fillGyroData(packet []byte) {
 }
 
 func (jc *joyconBluetooth) handleSubcommandReply(_packet []byte) {
-	// packetID := _packet[0]
+	packetID := _packet[0]
 	packet := _packet[1:]
 
-	replyPacketID := packet[12] - 0x80
+	replyPacketID := byte(0)
+	if packetID == 0x21 {
+		replyPacketID = packet[12] - 0x80
+	} else /* 0x31-0x33 */ {
+		replyPacketID = packet[12]
+	}
+
 	if replyPacketID == 0 {
 		return
 	}
 
-	fmt.Println("got subcommand reply packet:", replyPacketID, packet[12:])
+	//fmt.Println("got subcommand reply packet:", replyPacketID, packet[12:])
 	switch replyPacketID {
 	case 0x10: // SPI Flash Read
 		jc.handleSPIRead(packet[12:])
@@ -557,9 +563,13 @@ func (jc *joyconBluetooth) reader() {
 }
 
 func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
-	addr := binary.LittleEndian.Uint32(packet[1:])
-	length := packet[5]
-	data := packet[6:]
+	addr := binary.LittleEndian.Uint32(packet[2:])
+	length := packet[6]
+	data := packet[7:]
+
+	if int(length)+7 <= len(packet) {
+		data = packet[7 : 7+length]
+	}
 
 	if addr == 0x6050 && length == 6 {
 		jc.mu.Lock()
@@ -574,7 +584,6 @@ func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
 		jc.buttonColor.A = 255
 		jc.mu.Unlock()
 	}
-	// TODO stick calibration
 
 	jc.mu.Lock()
 	k := 0

@@ -21,7 +21,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 
 	"github.com/GeertJohan/cgo.wchar"

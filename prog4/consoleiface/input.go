@@ -1,6 +1,7 @@
 package consoleiface
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
@@ -200,6 +201,7 @@ var _ = addCommand(cmdDisconnectAll, "Disconnect all JoyCons.", "disconnectall")
 var _ = addCommand(cmdSetPlayerLights, "Set the player lights on the JoyCon", "setPlayerLights")
 var _ = addCommand(cmdSetHomeLights, "Set the home light pattern.", "setHomeLights")
 var _ = addCommand(cmdEnableIMU, "Enable/disable IMU.", "imu")
+var _ = addCommand(cmdSPIDump, "Read from SPI flash.", "read")
 var _ = addCommand(cmdCustomSend, "Send a subcommand packet.", "send")
 
 func cmdList(m *Manager, argv []string) {
@@ -333,4 +335,35 @@ func cmdDisconnectAll(m *Manager, argv []string) {
 	m.paired = nil
 	m.unpaired = nil
 	fmt.Println("Disconnected all.")
+}
+
+func cmdSPIDump(m *Manager, argv []string) {
+	jc, argv, err := selectJoyCon(m, argv)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if len(argv) == 0 {
+		fmt.Println("please specify the range: read [jc] [start=0x6000] [size=0x0100] [outfile=stdout]")
+		return
+	}
+
+	start, err := strconv.ParseInt(argv[0], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[0], err)
+		return
+	}
+	size, err := strconv.ParseInt(argv[1], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[1], err)
+		return
+	}
+
+	b, err := jcpc.SPIFlashRead(jc, uint32(start), uint32(size))
+	if err != nil {
+		fmt.Printf("SPI read %06x %d error: %v\n", start, size, err)
+	} else {
+		fmt.Printf("SPI read %06x %d data:\n%s\n", start, size, hex.Dump(b))
+	}
 }

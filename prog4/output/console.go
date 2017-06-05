@@ -14,7 +14,6 @@ type consoleFactory struct {
 	i int
 }
 
-
 func NewConsole(t jcpc.JoyConType, playerNum int) (jcpc.Output, error) {
 	return &consoleOutput{i: playerNum}, nil
 }

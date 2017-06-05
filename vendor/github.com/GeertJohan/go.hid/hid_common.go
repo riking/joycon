@@ -2,8 +2,8 @@ package hid
 
 import (
 	"errors"
-	"sync"
 	"fmt"
+	"sync"
 )
 
 var errNotImplemented = errors.New("not implemented yet")
@@ -61,7 +61,6 @@ type DeviceInfo struct {
 type DeviceInfoList []*DeviceInfo
 
 var initOnce sync.Once
-
 
 type wrapError struct {
 	w   error
