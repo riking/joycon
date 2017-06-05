@@ -1,16 +1,15 @@
 package joycon
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"image/color"
 	"sync"
-
 	"time"
 
 	"github.com/GeertJohan/go.hid"
 	"github.com/riking/joycon/prog4/jcpc"
-	"context"
 )
 
 const (
@@ -18,8 +17,10 @@ const (
 	modeButtonPush = iota
 	// the host requests the current status with a 0x01 command.
 	modeInputPolling
-	// the joycon pushes the current state at 60Hz.
+	// the joycon pushes the current state at 60Hz. (0x3 0x30)
 	modeInputPushing
+	// the joycon pushes large packets at 60Hz. (0x3 0x31)
+	modeNFC
 )
 
 type joyconBluetooth struct {
@@ -170,9 +171,9 @@ func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
 				chE <- e
 			}
 		},
-		Ctx: ctx,
+		Ctx:     ctx,
 		address: addr,
-		size: len,
+		size:    len,
 	})
 	jc.mu.Unlock()
 
@@ -190,6 +191,12 @@ func (jc *joyconBluetooth) BindToController(c jcpc.Controller) {
 	jc.mu.Lock()
 	jc.controller = c
 	jc.mu.Unlock()
+
+	if c == nil {
+		jc.hidHandle.AttemptGrab(false)
+	} else {
+		jc.hidHandle.AttemptGrab(true)
+	}
 }
 
 func (jc *joyconBluetooth) BindToInterface(c jcpc.Interface) {
@@ -292,7 +299,7 @@ func (jc *joyconBluetooth) OnFrame() {
 		jc.sendRumble(false)
 	case modeInputPolling:
 		jc.sendRumble(true)
-	case modeInputPushing:
+	case modeInputPushing, modeNFC:
 		jc.sendRumble(false)
 	}
 }
@@ -508,7 +515,6 @@ func (jc *joyconBluetooth) reader() {
 			continue
 		}
 
-		fmt.Println("read packet", packet)
 		switch packet[0] {
 		case 0x21:
 			jc.fillInput(packet)

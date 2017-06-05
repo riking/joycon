@@ -641,14 +641,27 @@ func (dev *Device) GetIndexedString(index int) (string, error) {
 // HID_API_EXPORT const wchar_t* HID_API_CALL hid_error(hid_device *device);
 
 func (dev *Device) lastError() error {
-	return errors.New(dev.lastErrorString())
+	str := dev.lastErrorString()
+	if str == "" {
+		return nil
+	}
+	return errors.New(str)
 }
 
 func (dev *Device) lastErrorString() string {
 	wcharPtr := C.hid_error(dev.hidHandle)
+	if wcharPtr == nil {
+		return ""
+	}
 	str, err := wcharToGoString(wcharPtr)
 	if err != nil {
 		return wrapError{w: err, ctx: "Error while converting error string"}.Error()
 	}
 	return str
+}
+
+// AttemptGrab attempts to "grab" the device for exclusive access by the program, so
+// no other program sees its input. If the parameter is false, any existing grab will be released.
+func (dev *Device) AttemptGrab(grab bool) error {
+	return errors.New("NotImplemented")
 }

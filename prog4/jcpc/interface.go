@@ -53,13 +53,14 @@ type Controller interface {
 	Close() error
 }
 
+// Output represents an OS-level event sink for a Controller object.
+// The Controller should call BeginUpdate(), then several *Update() methods, followed by FlushUpdate().
 type Output interface {
-	// The Controller should call several *Update() methods followed by Flush().
-	BeginUpdate()
+	BeginUpdate() error
 	ButtonUpdate(b ButtonID, value bool)
-	StickUpdate(axis int, value int8)
-	GyroUpdate(vals [3]GyroFrame)
-	Flush() error
+	StickUpdate(axis AxisID, value int8)
+	GyroUpdate(vals GyroFrame)
+	FlushUpdate() error
 
 	OnFrame()
 	Close() error

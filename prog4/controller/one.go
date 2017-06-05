@@ -10,7 +10,7 @@ import (
 type one struct {
 	base
 
-	mu    sync.Mutex
+	mu sync.Mutex
 	jc jcpc.JoyCon
 
 	lastUpdate time.Time
@@ -32,11 +32,11 @@ func (c *one) Rumble(data []jcpc.RumbleData) {
 }
 
 func (c *one) JoyConUpdate(jc jcpc.JoyCon, flags int) {
-	if flags & jcpc.NotifyInput != 0 {
+	if flags&jcpc.NotifyInput != 0 {
 		c.update()
 	}
 
-	if flags & jcpc.NotifyConnection != 0 {
+	if flags&jcpc.NotifyConnection != 0 {
 		if jc.IsStopping() {
 			c.ui.RemoveController(c)
 		}

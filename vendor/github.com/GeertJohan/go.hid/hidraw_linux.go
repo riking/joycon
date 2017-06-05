@@ -39,6 +39,7 @@ type Device struct {
 	epoll  int
 	fd     int
 	closed bool
+	grab   bool
 
 	serial      string
 	productName string
@@ -330,9 +331,33 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 	return nil
 }
 
+func (dev *Device) AttemptGrab(grab bool) error {
+	param := uintptr(0)
+	if grab {
+		param = 1
+	}
+	status, _, err := unix.Syscall(syscall.SYS_IOCTL,
+		uintptr(dev.fd),
+		uintptr(C.EVIOCGRAB),
+		param)
+	if status != 0 {
+		return err
+	}
+	dev.grab = grab
+	return nil
+}
+
 func (dev *Device) Close() error {
 	if dev == nil || dev.closed {
 		return os.ErrClosed
+	}
+
+	if dev.grab {
+		unix.Syscall(syscall.SYS_IOCTL,
+			uintptr(dev.fd),
+			uintptr(C.EVIOCGRAB),
+			uintptr(0))
+		dev.grab = false
 	}
 
 	unix.Close(dev.fd)

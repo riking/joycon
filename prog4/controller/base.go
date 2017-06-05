@@ -1,6 +1,10 @@
 package controller
 
-import "github.com/riking/joycon/prog4/jcpc"
+import (
+	"fmt"
+
+	"github.com/riking/joycon/prog4/jcpc"
+)
 
 type base struct {
 	output jcpc.Output
@@ -35,11 +39,16 @@ func (c *base) dispatchUpdates() {
 	}
 	for i := 0; i < 4; i++ {
 		if c.prevState.RawSticks[i/2][i%2] != c.curState.RawSticks[i/2][i%2] {
-			c.output.StickUpdate(i, int8(c.curState.RawSticks[i/2][i%2]-0x80))
+			c.output.StickUpdate(jcpc.AxisID(i), int8(c.curState.RawSticks[i/2][i%2]-0x80))
 		}
 	}
 	if c.curState.Gyro != jcpc.GyroZero {
-		c.output.GyroUpdate(c.curState.Gyro)
+		c.output.GyroUpdate(c.curState.Gyro[0])
+		c.output.GyroUpdate(c.curState.Gyro[1])
+		c.output.GyroUpdate(c.curState.Gyro[2])
 	}
-	c.output.Flush()
+	err := c.output.FlushUpdate()
+	if err != nil {
+		fmt.Println("Output error:", err)
+	}
 }

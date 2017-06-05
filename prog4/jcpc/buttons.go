@@ -65,12 +65,23 @@ var ButtonList = []ButtonID{
 	Button_L_ZL,
 }
 
+func (b ButtonID) GetIndex() int {
+	q := b & 0xFF
+	add := int((b & 0xF00) >> 5) // convert byte index to multiple of 8 - x >> 8 << 3
+	for i, v := range ButtonList {
+		if q == v {
+			return i + add
+		}
+	}
+	return -1
+}
+
 const (
 	// Stick - uint8 from [0, 255]
-	Axis_L_Vertical = iota
-	Axis_L_Horiz
-	Axis_R_Vertical
+	Axis_L_Horiz = iota
+	Axis_L_Vertical
 	Axis_R_Horiz
+	Axis_R_Vertical
 	// Gyro - int16 from [-0x10FF, +0x10FF]
 	Axis_Yaw_X
 	Axis_Yaw_Y

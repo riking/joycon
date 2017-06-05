@@ -248,7 +248,7 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if flags & jcpc.NotifyConnection != 0 {
+	if flags&jcpc.NotifyConnection != 0 {
 		idx := -1
 		for i, aJC := range m.wantReconnect {
 			if jc == aJC {
@@ -281,7 +281,7 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 		}
 	}
 
-	if flags & jcpc.NotifyInput != 0 {
+	if flags&jcpc.NotifyInput != 0 {
 		idx := -1
 		for i, v := range m.unpaired {
 			if jc == v.jc {
@@ -307,7 +307,7 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 		}
 	}
 
-	if flags & jcpc.NotifyBattery != 0 {
+	if flags&jcpc.NotifyBattery != 0 {
 		fmt.Printf("%s (%s): %s\n", jc.Type().String(), jc.Serial(), renderBattery(jc.Battery()))
 	}
 }

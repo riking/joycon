@@ -37,7 +37,7 @@ func (c *two) Rumble(data []jcpc.RumbleData) {
 func (c *two) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	isLeft := jc == c.left
 
-	if flags & jcpc.NotifyInput != 0 {
+	if flags&jcpc.NotifyInput != 0 {
 		c.mu.Lock()
 		if isLeft {
 			c.leftReady = true
@@ -59,7 +59,7 @@ func (c *two) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 		}
 	}
 
-	if flags & jcpc.NotifyConnection != 0 {
+	if flags&jcpc.NotifyConnection != 0 {
 		if jc.IsStopping() {
 			c.ui.RemoveController(c)
 		}
