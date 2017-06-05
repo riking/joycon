@@ -17,15 +17,15 @@ type two struct {
 	lastUpdate time.Time
 	leftReady  bool
 	rightReady bool
-
-	leftPrevBattery  int8
-	rightPrevBattery int8
 }
 
-func TwoJoyCons(left, right jcpc.JoyCon) jcpc.Controller {
+func TwoJoyCons(left, right jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
 	return &two{
 		left:  left,
 		right: right,
+		base: base{
+			ui: ui,
+		},
 	}
 }
 
@@ -34,28 +34,35 @@ func (c *two) Rumble(data []jcpc.RumbleData) {
 	c.right.Rumble(data)
 }
 
-func (c *two) JoyConUpdate(jc jcpc.JoyCon) {
+func (c *two) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	isLeft := jc == c.left
 
-	c.mu.Lock()
-	if isLeft {
-		c.leftReady = true
-	} else {
-		c.rightReady = true
-	}
-	bothReady := c.leftReady && c.rightReady
-	if !bothReady {
-		if time.Since(c.lastUpdate) > 10*time.Millisecond {
-			bothReady = true
+	if flags & jcpc.NotifyInput != 0 {
+		c.mu.Lock()
+		if isLeft {
+			c.leftReady = true
+		} else {
+			c.rightReady = true
+		}
+		bothReady := c.leftReady && c.rightReady
+		if !bothReady {
+			if time.Since(c.lastUpdate) > 10*time.Millisecond {
+				bothReady = true
+			}
+		}
+		c.mu.Unlock()
+
+		if bothReady {
+			c.updateBoth()
+		} else {
+			// wait for other controller to update
 		}
 	}
-	c.mu.Unlock()
 
-	if bothReady {
-		c.updateBoth()
-	} else {
-		// wait for other controller to update
-		return
+	if flags & jcpc.NotifyConnection != 0 {
+		if jc.IsStopping() {
+			c.ui.RemoveController(c)
+		}
 	}
 }
 
@@ -68,14 +75,5 @@ func (c *two) updateBoth() {
 	c.left.ReadInto(&c.curState, false)
 	c.right.ReadInto(&c.curState, true)
 
-	buttonDiff := c.prevState.Buttons.DiffMask(c.curState.Buttons)
-	for _, bu := range jcpc.ButtonList {
-		if buttonDiff.Get(bu) {
-			c.output.ButtonUpdate(bu, c.curState.Buttons.Get(bu))
-		}
-	}
-	for i := 0; i < 4; i++ {
-
-	}
-	c.output.Flush()
+	c.dispatchUpdates()
 }

@@ -26,6 +26,9 @@ func (f *consoleFactory) New(bool) (jcpc.Output, error) {
 func (c *consoleOutput) OnFrame() {
 }
 
+func (c *consoleOutput) BeginUpdate() {
+}
+
 func (c *consoleOutput) ButtonUpdate(bu jcpc.ButtonID, state bool) {
 	pressed := "pressed"
 	if !state {
@@ -38,7 +41,7 @@ func (c *consoleOutput) StickUpdate(axis int, value int8) {
 
 }
 
-func (c *consoleOutput) GyroUpdate(axis int, value int16) {
+func (c *consoleOutput) GyroUpdate(d [3]jcpc.GyroFrame) {
 
 }
 

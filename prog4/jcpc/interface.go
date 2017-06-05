@@ -27,6 +27,7 @@ type JoyCon interface {
 	ReadInto(out *CombinedState, includeGyro bool)
 
 	EnableIMU(status bool)
+	SPIRead(addr uint32, len byte) ([]byte, error)
 
 	// Valid returns have alpha=255. If alpha=0 the value is not yet available.
 	CaseColor() color.RGBA
@@ -41,7 +42,7 @@ type JoyCon interface {
 }
 
 type Controller interface {
-	JoyConUpdate(JoyCon)
+	JoyConNotify
 	BindToOutput(Output)
 
 	// forwards to each JoyCon
@@ -54,9 +55,10 @@ type Controller interface {
 
 type Output interface {
 	// The Controller should call several *Update() methods followed by Flush().
+	BeginUpdate()
 	ButtonUpdate(b ButtonID, value bool)
 	StickUpdate(axis int, value int8)
-	GyroUpdate(axis int, value int16)
+	GyroUpdate(vals [3]GyroFrame)
 	Flush() error
 
 	OnFrame()
@@ -68,7 +70,8 @@ type OutputFactory interface {
 }
 
 type Interface interface {
-	JoyConUpdate(JoyCon)
+	JoyConNotify
+	RemoveController(c Controller)
 }
 
 /*
@@ -86,9 +89,19 @@ shoulder down : [0] = -15, [1] =   0, [2] =   0
 
 type CombinedState struct {
 	// 3 frames of 6 values
-	Gyro [3][6]int16
+	Gyro [3]GyroFrame
 	// [left, right][horizontal, vertical]
 	RawSticks [2][2]uint8
 	Buttons   ButtonState
 	// battery is per joycon, can't be combined
+}
+
+const (
+	NotifyInput = 1 << iota
+	NotifyConnection
+	NotifyBattery
+)
+
+type JoyConNotify interface {
+	JoyConUpdate(jc JoyCon, flags int)
 }
