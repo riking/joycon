@@ -332,15 +332,18 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 }
 
 func (dev *Device) AttemptGrab(grab bool) error {
-	var param C.int
+	var param C.int = 0
 	if grab {
 		param = 1
 	}
+	return nil
+	fmt.Println("grab", grab)
 	status, _, err := unix.Syscall(syscall.SYS_IOCTL,
 		uintptr(dev.fd),
 		uintptr(C.EVIOCGRAB),
 		uintptr(unsafe.Pointer(&param)))
 	if status != 0 {
+		fmt.Println("grab error", err)
 		return err
 	}
 	dev.grab = grab
@@ -352,9 +355,8 @@ func (dev *Device) Close() error {
 		return os.ErrClosed
 	}
 
-	if dev.grab {
-		dev.AttemptGrab(false)
-	}
+	fmt.Println("closing uinput", dev.fd, dev.epoll, dev.grab)
+	dev.AttemptGrab(false)
 
 	unix.Close(dev.fd)
 	unix.Close(dev.epoll)

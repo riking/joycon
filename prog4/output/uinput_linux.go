@@ -90,8 +90,6 @@ type internalKeyCodeMapping struct {
 	KeyCodes [3 * 8]uint16 // 3 bytes * 8 bits -> uinput key code
 }
 
-const uinputEventSize = C.sizeof_struct_input_event
-
 func (u uinputEvent) EncodeTo(p []byte) int {
 	binary.LittleEndian.PutUint16(p[C.offset_of_type:], u.Type)
 	binary.LittleEndian.PutUint16(p[C.offset_of_code:], u.Code)
@@ -162,6 +160,7 @@ func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
 	setup.ff_effects_max = ff_effects_max
 
 	o.axes = m.Axes
+	maxAxis := uint16(0)
 	for _, e := range o.axes {
 		if e.Name == "" {
 			continue
@@ -170,15 +169,22 @@ func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
 		if !ok {
 			return errors.Errorf("Unrecognized axis name '%s'", e.Name)
 		}
+		if code > maxAxis {
+			maxAxis = code
+		}
 		setup.absmin[code] = -128
 		setup.absmax[code] = 128
 		setup.absflat[code] = 2
 		setup.absfuzz[code] = 2
+	}
+
+	for code := uint16(0); code <= maxAxis; code++ {
 		err := o.ui_ioctl(C.UI_SET_ABSBIT, uintptr(code))
 		if err != nil {
 			return errors.Wrap(err, "ioctl uinput_setbit_abs")
 		}
 	}
+
 
 	n, err := C.write_uinput_setup(&setup, C.int(o.fd))
 	if err != nil {
@@ -214,7 +220,7 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
 	}
 	// TODO
-	//err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_FF)
+	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_FF)
 	if err != nil {
 		unix.Close(fd)
 		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")

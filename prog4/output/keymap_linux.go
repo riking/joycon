@@ -42,6 +42,7 @@ var linuxKeyNames = []linuxKeyCode{
 }
 
 var linuxAxisNames = []linuxKeyCode{
+	// have to avoid ABS_X and ABS_Y because X thinks it's a mouse despite BTN_GAMEPAD
 	{"MainStickHoriz", C.ABS_Z},
 	{"MainStickVertical", C.ABS_RX},
 	{"SecondStickHoriz", C.ABS_RY},

@@ -211,7 +211,7 @@ func (jc *joyconBluetooth) BindToController(c jcpc.Controller) {
 	if c == nil {
 		jc.hidHandle.AttemptGrab(false)
 	} else {
-		jc.hidHandle.AttemptGrab(true)
+		jc.hidHandle.AttemptGrab(false)
 	}
 }
 

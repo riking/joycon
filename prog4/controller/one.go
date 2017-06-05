@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -37,7 +36,6 @@ func (c *one) Rumble(data []jcpc.RumbleData) {
 
 func (c *one) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	if flags&jcpc.NotifyInput != 0 {
-		fmt.Println("doing update")
 		c.update()
 	}
 
