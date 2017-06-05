@@ -4,12 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"github.com/pkg/errors"
 	"github.com/riking/joycon/prog4/jcpc"
 	"golang.org/x/sys/unix"
-	"syscall"
 )
 
 /*
@@ -17,6 +17,7 @@ import (
 //#include <linux/uinput.h>
 #include "uinput_linux.h"
 #include <stddef.h>
+#include <unistd.h>
 
 static const struct input_event sample_ev;
 const size_t offset_of_type = offsetof(struct input_event, type);
@@ -24,7 +25,7 @@ const size_t offset_of_code = offsetof(struct input_event, code);
 const size_t offset_of_value = offsetof(struct input_event, value);
 
 int write_uinput_setup(struct uinput_user_dev *setup, int fd) {
-
+	return write(fd, setup, sizeof(*setup));
 }
 
 */
@@ -65,7 +66,7 @@ func (o *uinput) ui_ioctl_r(code, val uintptr) (uintptr, error) {
 		uintptr(code),
 		uintptr(val))
 	if err != syscall.Errno(0) {
-		return -1, err
+		return 0, err
 	}
 	return status, nil
 }
@@ -98,7 +99,7 @@ func (o *uinput) setupNewKernel(m ControllerMapping, name string) error {
 	setup.id.version = 1
 	setup.ff_effects_max = ff_effects_max
 	for i, v := range []byte(name) {
-		setup.name[i] = v
+		setup.name[i] = C.char(v)
 	}
 	err := o.ui_ioctl(C.UI_DEV_SETUP, uintptr(unsafe.Pointer(&setup)))
 	if err != nil {
@@ -147,7 +148,7 @@ func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
 	setup.id.product = jcpc.JOYCON_PRODUCT_FAKE
 	setup.id.version = 1
 	for i, v := range []byte(name) {
-		setup.name[i] = v
+		setup.name[i] = C.char(v)
 	}
 	setup.ff_effects_max = ff_effects_max
 
