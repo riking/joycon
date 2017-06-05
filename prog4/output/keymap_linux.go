@@ -16,8 +16,6 @@ var linuxKeyNames = []linuxKeyCode{
 	{"GamepadEast", C.BTN_EAST},
 	{"GamepadNorth", C.BTN_NORTH},
 	{"GamepadWest", C.BTN_WEST},
-	{"GamepadC", C.BTN_C},
-	{"GamepadZ", C.BTN_Z},
 	{"GamepadTL", C.BTN_TL},
 	{"GamepadTR", C.BTN_TR},
 	{"GamepadTL2", C.BTN_TL2},
@@ -31,7 +29,16 @@ var linuxKeyNames = []linuxKeyCode{
 	{"GamepadD-Down", C.BTN_DPAD_DOWN},
 	{"GamepadD-Left", C.BTN_DPAD_LEFT},
 	{"GamepadD-Right", C.BTN_DPAD_RIGHT},
-	{"Screenshot", C.KEY_SYSRQ},
+	{"GamepadCapture", C.BTN_GAMEPAD + 15},
+
+	{"GamepadExtra1", C.BTN_TRIGGER_HAPPY + 0},
+	{"GamepadExtra2", C.BTN_TRIGGER_HAPPY + 1},
+	{"GamepadExtra3", C.BTN_TRIGGER_HAPPY + 2},
+	{"GamepadExtra4", C.BTN_TRIGGER_HAPPY + 3},
+	{"GamepadExtra5", C.BTN_TRIGGER_HAPPY + 4},
+	{"GamepadExtra6", C.BTN_TRIGGER_HAPPY + 5},
+	{"GamepadExtra7", C.BTN_TRIGGER_HAPPY + 6},
+	{"GamepadExtra8", C.BTN_TRIGGER_HAPPY + 7},
 }
 
 var linuxAxisNames = []linuxKeyCode{

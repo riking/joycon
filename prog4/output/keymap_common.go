@@ -30,8 +30,8 @@ var MappingL = ControllerMapping{
 
 		{jcpc.Button_L_SL, "GamepadTL"},
 		{jcpc.Button_L_SR, "GamepadTR"},
-		{jcpc.Button_L_L, "GamepadC"}, // TODO - what should the side buttons be mapped to
-		{jcpc.Button_L_ZL, "GamepadZ"},
+		{jcpc.Button_L_L, "GamepadTL2"}, // TODO - what should the side buttons be mapped to
+		{jcpc.Button_L_ZL, "GamepadTR2"},
 
 		{jcpc.Button_Capture, "GamepadStart"},
 		{jcpc.Button_Minus, "GamepadSelect"},
@@ -52,8 +52,8 @@ var MappingR = ControllerMapping{
 
 		{jcpc.Button_R_SL, "GamepadTL"},
 		{jcpc.Button_R_SR, "GamepadTR"},
-		{jcpc.Button_R_R, "GamepadC"},
-		{jcpc.Button_R_ZR, "GamepadZ"},
+		{jcpc.Button_R_R, "GamepadTL2"},
+		{jcpc.Button_R_ZR, "GamepadTR2"},
 
 		{jcpc.Button_Home, "GamepadStart"},
 		{jcpc.Button_Plus, "GamepadSelect"},
@@ -83,13 +83,13 @@ var MappingDual = ControllerMapping{
 		{jcpc.Button_R_ZR, "GamepadTR2"},
 
 		// TODO better mappings?
-		{jcpc.Button_L_SL, "GamepadC"},
-		{jcpc.Button_L_SR, "GamepadZ"},
-		{jcpc.Button_R_SL, "GamepadC"},
-		{jcpc.Button_R_SR, "GamepadZ"},
+		{jcpc.Button_L_SL, "GamepadExtra1"},
+		{jcpc.Button_L_SR, "GamepadExtra2"},
+		{jcpc.Button_R_SL, "GamepadExtra3"},
+		{jcpc.Button_R_SR, "GamepadExtra4"},
 
 		{jcpc.Button_Home, "GamepadLogo"},
-		{jcpc.Button_Capture, "Screenshot"},
+		{jcpc.Button_Capture, "GamepadCapture"},
 		{jcpc.Button_Plus, "GamepadStart"},
 		{jcpc.Button_Minus, "GamepadSelect"},
 		{jcpc.Button_R_Stick, "GamepadRStick"},

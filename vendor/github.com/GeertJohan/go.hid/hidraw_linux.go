@@ -332,14 +332,14 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 }
 
 func (dev *Device) AttemptGrab(grab bool) error {
-	param := uintptr(0)
+	var param C.int
 	if grab {
 		param = 1
 	}
 	status, _, err := unix.Syscall(syscall.SYS_IOCTL,
 		uintptr(dev.fd),
 		uintptr(C.EVIOCGRAB),
-		param)
+		uintptr(unsafe.Pointer(&param)))
 	if status != 0 {
 		return err
 	}

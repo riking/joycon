@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/riking/joycon/prog4/jcpc"
 	"golang.org/x/sys/unix"
+	"syscall"
 )
 
 /*
@@ -21,6 +22,10 @@ static const struct input_event sample_ev;
 const size_t offset_of_type = offsetof(struct input_event, type);
 const size_t offset_of_code = offsetof(struct input_event, code);
 const size_t offset_of_value = offsetof(struct input_event, value);
+
+int write_uinput_setup(struct uinput_user_dev *setup, int fd) {
+
+}
 
 */
 import "C"
@@ -43,15 +48,26 @@ type uinput struct {
 	pending []uinputEvent
 }
 
-func (u *uinput) ui_ioctl(code, val uintptr) error {
+func (o *uinput) ui_ioctl(code, val uintptr) error {
 	status, _, err := unix.Syscall(unix.SYS_IOCTL,
-		uintptr(u.fd),
+		uintptr(o.fd),
 		uintptr(code),
 		uintptr(val))
 	if status != 0 {
 		return err
 	}
 	return nil
+}
+
+func (o *uinput) ui_ioctl_r(code, val uintptr) (uintptr, error) {
+	status, _, err := unix.Syscall(unix.SYS_IOCTL,
+		uintptr(o.fd),
+		uintptr(code),
+		uintptr(val))
+	if err != syscall.Errno(0) {
+		return -1, err
+	}
+	return status, nil
 }
 
 type uinputEvent struct {
@@ -74,57 +90,19 @@ func (u uinputEvent) EncodeTo(p []byte) int {
 	return C.sizeof_struct_input_event
 }
 
-func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
-	o := &uinput{}
-
-	fd, err := unix.Open("/dev/uinput", unix.O_RDWR|unix.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, err
-	}
-	o.fd = fd
-
-	var setup struct {
-		id struct {
-			bustype uint16
-			vendor  uint16
-			product uint16
-			version uint16
-		}
-		name           [C.UINPUT_MAX_NAME_SIZE]byte
-		ff_effects_max uint32
-	}
+func (o *uinput) setupNewKernel(m ControllerMapping, name string) error {
+	var setup C.struct_uinput_setup
 	setup.id.bustype = C.BUS_BLUETOOTH
 	setup.id.vendor = jcpc.VENDOR_NINTENDO
 	setup.id.product = jcpc.JOYCON_PRODUCT_FAKE
-	setup.id.version = 30
-	copy(setup.name[:], name)
+	setup.id.version = 1
 	setup.ff_effects_max = ff_effects_max
-	err = o.ui_ioctl(C.UI_DEV_SETUP, uintptr(unsafe.Pointer(&setup)))
-	if err != nil {
-		unix.Close(fd)
-		return nil, errors.Wrap(err, "ioctl uinput_device_setup")
+	for i, v := range []byte(name) {
+		setup.name[i] = v
 	}
-
-	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_SYN)
+	err := o.ui_ioctl(C.UI_DEV_SETUP, uintptr(unsafe.Pointer(&setup)))
 	if err != nil {
-		unix.Close(fd)
-		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
-	}
-	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_ABS)
-	if err != nil {
-		unix.Close(fd)
-		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
-	}
-	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_KEY)
-	if err != nil {
-		unix.Close(fd)
-		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
-	}
-	// TODO
-	//err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_FF)
-	if err != nil {
-		unix.Close(fd)
-		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
+		return errors.Wrap(err, "ioctl uinput_device_setup")
 	}
 
 	var abs_setup struct {
@@ -151,14 +129,99 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 		}
 		code, ok := linuxKeyMap[e.Name]
 		if !ok {
-			return nil, errors.Errorf("Unrecognized axis name '%s'", e.Name)
+			return errors.Errorf("Unrecognized axis name '%s'", e.Name)
 		}
 		abs_setup.code = code
 		err = o.ui_ioctl(C.UI_ABS_SETUP, uintptr(unsafe.Pointer(&abs_setup)))
 		if err != nil {
-			unix.Close(fd)
-			return nil, errors.Wrap(err, "ioctl uinput_abs_setup")
+			return errors.Wrap(err, "ioctl uinput_abs_setup")
 		}
+	}
+	return nil
+}
+
+func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
+	var setup C.struct_uinput_user_dev
+	setup.id.bustype = C.BUS_BLUETOOTH
+	setup.id.vendor = jcpc.VENDOR_NINTENDO
+	setup.id.product = jcpc.JOYCON_PRODUCT_FAKE
+	setup.id.version = 1
+	for i, v := range []byte(name) {
+		setup.name[i] = v
+	}
+	setup.ff_effects_max = ff_effects_max
+
+	o.axes = m.Axes
+	for _, e := range o.axes {
+		if e.Name == "" {
+			continue
+		}
+		code, ok := linuxKeyMap[e.Name]
+		if !ok {
+			return errors.Errorf("Unrecognized axis name '%s'", e.Name)
+		}
+		setup.absmin[code] = -128
+		setup.absmax[code] = 128
+		setup.absflat[code] = 2
+		setup.absfuzz[code] = 2
+		err := o.ui_ioctl(C.UI_SET_ABSBIT, uintptr(code))
+		if err != nil {
+			return errors.Wrap(err, "ioctl uinput_setbit_abs")
+		}
+	}
+
+	n, err := C.write_uinput_setup(&setup, C.int(o.fd))
+	if err != nil {
+		return errors.Wrap(err, "write uinput_user_dev")
+	} else if n != C.sizeof_struct_uinput_user_dev {
+		return errors.Errorf("Short write for uinput setup")
+	}
+	return nil
+}
+
+func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
+	o := &uinput{}
+
+	fd, err := unix.Open("/dev/uinput", unix.O_RDWR|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	o.fd = fd
+
+	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_SYN)
+	if err != nil {
+		unix.Close(fd)
+		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
+	}
+	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_ABS)
+	if err != nil {
+		unix.Close(fd)
+		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
+	}
+	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_KEY)
+	if err != nil {
+		unix.Close(fd)
+		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
+	}
+	// TODO
+	//err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_FF)
+	if err != nil {
+		unix.Close(fd)
+		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
+	}
+
+	var version_a C.uint
+
+	version_b, err := o.ui_ioctl_r(C.UI_GET_VERSION, uintptr(unsafe.Pointer(&version_a)))
+	if err == nil && (version_a == 5 || version_b == 5) {
+		err = o.setupNewKernel(m, name)
+	} else {
+		fmt.Printf("Using old uinput interface from before kernel 4.5 (%d %d %v)\n", version_a, version_b, err)
+		err = o.setupOldKernel(m, name)
+	}
+	if err != nil {
+		unix.Close(fd)
+		return nil, err
 	}
 
 	o.buttons = commonMappingToInternal(m)
@@ -185,13 +248,13 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 	return o, nil
 }
 
-func (u *uinput) BeginUpdate() error {
-	u.mu.Lock()
+func (o *uinput) BeginUpdate() error {
+	o.mu.Lock()
 	return nil
 }
 
-func (u *uinput) ButtonUpdate(b jcpc.ButtonID, state bool) {
-	keyCode := u.buttons.KeyCodes[b.GetIndex()]
+func (o *uinput) ButtonUpdate(b jcpc.ButtonID, state bool) {
+	keyCode := o.buttons.KeyCodes[b.GetIndex()]
 	if keyCode == 0 {
 		return
 	}
@@ -199,18 +262,18 @@ func (u *uinput) ButtonUpdate(b jcpc.ButtonID, state bool) {
 	if state {
 		val = 1
 	}
-	u.pending = append(u.pending, uinputEvent{
+	o.pending = append(o.pending, uinputEvent{
 		Type:  C.EV_KEY,
 		Code:  keyCode,
 		Value: val,
 	})
 }
 
-func (u *uinput) StickUpdate(axis jcpc.AxisID, value int8) {
+func (o *uinput) StickUpdate(axis jcpc.AxisID, value int8) {
 	var code uint16
 	var ok bool
 
-	for _, e := range u.axes {
+	for _, e := range o.axes {
 		if e.Axis == axis {
 			code, ok = linuxKeyMap[e.Name]
 			break
@@ -219,20 +282,20 @@ func (u *uinput) StickUpdate(axis jcpc.AxisID, value int8) {
 	if !ok {
 		return
 	}
-	u.pending = append(u.pending, uinputEvent{
+	o.pending = append(o.pending, uinputEvent{
 		Type:  C.EV_ABS,
 		Code:  code,
 		Value: int32(value),
 	})
 }
 
-func (u *uinput) GyroUpdate(vals jcpc.GyroFrame) {}
+func (o *uinput) GyroUpdate(vals jcpc.GyroFrame) {}
 
-func (u *uinput) FlushUpdate() error {
-	defer u.mu.Unlock()
+func (o *uinput) FlushUpdate() error {
+	defer o.mu.Unlock()
 
-	buf := make([]byte, (1+len(u.pending))*C.sizeof_struct_input_event)
-	for i, v := range u.pending {
+	buf := make([]byte, (1+len(o.pending))*C.sizeof_struct_input_event)
+	for i, v := range o.pending {
 		v.EncodeTo(buf[i*C.sizeof_struct_input_event:])
 	}
 	evSync := uinputEvent{
@@ -240,21 +303,21 @@ func (u *uinput) FlushUpdate() error {
 		Code:  C.SYN_REPORT,
 		Value: 0,
 	}
-	evSync.EncodeTo(buf[len(u.pending)*C.sizeof_struct_input_event:])
-	n, err := unix.Write(u.fd, buf)
+	evSync.EncodeTo(buf[len(o.pending)*C.sizeof_struct_input_event:])
+	n, err := unix.Write(o.fd, buf)
 	if n != len(buf) {
 		fmt.Println("[!!] short uinput write", n)
 	}
 	return err
 }
 
-func (u *uinput) OnFrame() {}
+func (o *uinput) OnFrame() {}
 
-func (u *uinput) Close() error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (o *uinput) Close() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-	unix.Close(u.fd)
-	u.fd = -1
+	unix.Close(o.fd)
+	o.fd = -1
 	return nil
 }
