@@ -356,7 +356,6 @@ func (o *uinput) FlushUpdate() error {
 	if len(o.pending) == 0 {
 		return nil
 	}
-	fmt.Println("pushing", len(o.pending), "events")
 	buf := make([]byte, (1+len(o.pending))*C.sizeof_struct_input_event)
 	for i, v := range o.pending {
 		v.EncodeTo(buf[i*C.sizeof_struct_input_event:])
