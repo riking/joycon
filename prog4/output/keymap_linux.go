@@ -29,7 +29,7 @@ var linuxKeyNames = []linuxKeyCode{
 	{"GamepadD-Down", C.BTN_DPAD_DOWN},
 	{"GamepadD-Left", C.BTN_DPAD_LEFT},
 	{"GamepadD-Right", C.BTN_DPAD_RIGHT},
-	{"GamepadCapture", C.BTN_GAMEPAD + 15},
+	{"GamepadCapture", C.BTN_TASK},
 
 	{"GamepadExtra1", C.BTN_TRIGGER_HAPPY + 0},
 	{"GamepadExtra2", C.BTN_TRIGGER_HAPPY + 1},
