@@ -353,11 +353,7 @@ func (dev *Device) Close() error {
 	}
 
 	if dev.grab {
-		unix.Syscall(syscall.SYS_IOCTL,
-			uintptr(dev.fd),
-			uintptr(C.EVIOCGRAB),
-			uintptr(0))
-		dev.grab = false
+		dev.AttemptGrab(false)
 	}
 
 	unix.Close(dev.fd)

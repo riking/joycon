@@ -12,17 +12,6 @@ import (
 	"github.com/riking/joycon/prog4/jcpc"
 )
 
-const (
-	// the joycon pushes updates to button presses with the 0x3F command.
-	modeButtonPush = iota
-	// the host requests the current status with a 0x01 command.
-	modeInputPolling
-	// the joycon pushes the current state at 60Hz. (0x3 0x30)
-	modeInputPushing
-	// the joycon pushes large packets at 60Hz. (0x3 0x31)
-	modeNFC
-)
-
 type joyconBluetooth struct {
 	hidHandle *hid.Device
 
@@ -36,7 +25,7 @@ type joyconBluetooth struct {
 	// isShutdown is set to true on Close() and Shutdown().
 	// Shutdown also requests that the JoyCon disconnect from the host.
 	isShutdown bool
-	mode       int
+	mode       jcpc.InputMode
 	controller jcpc.Controller
 	ui         jcpc.Interface
 
@@ -72,7 +61,7 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 	jc.side = side
 	jc.controller = nil
 	jc.haveColors = false
-	jc.mode = modeButtonPush
+	jc.mode = jcpc.ModeLazyButtons
 	jc.isAlive = true
 
 	go jc.reader()
@@ -103,7 +92,7 @@ func (jc *joyconBluetooth) ButtonColor() color.RGBA {
 	return jc.caseColor
 }
 
-func (jc *joyconBluetooth) EnableIMU(status bool) {
+func (jc *joyconBluetooth) EnableGyro(status bool) {
 	subcommand := []byte{0x40, 0}
 	if status {
 		subcommand[1] = 1
@@ -120,6 +109,33 @@ func (jc *joyconBluetooth) RawSticks(axis jcpc.AxisID) [2]byte {
 		return jc.raw_stick[0]
 	} else {
 		return jc.raw_stick[1]
+	}
+}
+
+func (jc *joyconBluetooth) ChangeInputMode(newMode jcpc.InputMode) bool {
+	jc.mu.Lock()
+	defer jc.mu.Unlock()
+
+	if newMode == jc.mode {
+		return true
+	}
+
+	if !newMode.NeedsMode3() {
+		if jc.mode.NeedsMode3() {
+			// TODO - soft disconnect? e.g. on controller reset
+			return false
+		} else {
+			jc.mode = newMode
+			return true
+		}
+	} else {
+		cmd := []byte{0x03, 0x30}
+		if newMode == jcpc.ModeNFC {
+			cmd[1] = 0x31
+		}
+		jc.subcommandQueue = append(jc.subcommandQueue, cmd)
+		//jc.mode = newMode
+		return true
 	}
 }
 
@@ -282,26 +298,19 @@ func (jc *joyconBluetooth) queueSubcommand(data []byte) {
 
 // OnFrame triggers writes - this way they're rate-limited
 func (jc *joyconBluetooth) OnFrame() {
-	sendingCommand := true
+	connBroken := false
 	jc.mu.Lock()
 	if !jc.isAlive || jc.isShutdown {
-		sendingCommand = false
+		connBroken = true
 	}
 
 	jc.mu.Unlock()
 
-	if !sendingCommand {
+	if connBroken {
 		return
 	}
 
-	switch jc.mode {
-	case modeButtonPush:
-		jc.sendRumble(false)
-	case modeInputPolling:
-		jc.sendRumble(true)
-	case modeInputPushing, modeNFC:
-		jc.sendRumble(false)
-	}
+	jc.sendRumble(jc.mode.NeedsEmptyRumbles())
 }
 
 // mu must be held
@@ -478,12 +487,13 @@ func (jc *joyconBluetooth) handleSubcommandReply(_packet []byte) {
 }
 
 func (jc *joyconBluetooth) handleButtonPush(packet []byte) {
-	if jc.mode != modeButtonPush {
+	if jc.mode != jcpc.ModeLazyButtons {
 		return
 	}
 
 	// translating the buttons is too much of a pain
 	// and requires different handling from pro controller
+	// so just queue an empty subcommand
 	jc.queueSubcommand([]byte{0})
 }
 
@@ -515,16 +525,25 @@ func (jc *joyconBluetooth) reader() {
 			continue
 		}
 
+		//fmt.Println(packet)
 		switch packet[0] {
 		case 0x21:
 			jc.fillInput(packet)
 			jc.handleSubcommandReply(packet)
 			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		case 0x30:
+			jc.mu.Lock()
+			jc.mode = jcpc.ModeStandard
+			jc.mu.Unlock()
+
 			jc.fillInput(packet)
 			jc.fillGyroData(packet)
 			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		case 0x31, 0x32, 0x33:
+			jc.mu.Lock()
+			jc.mode = jcpc.ModeNFC
+			jc.mu.Unlock()
+
 			jc.fillInput(packet)
 			jc.handleSubcommandReply(packet)
 			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)

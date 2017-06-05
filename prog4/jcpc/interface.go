@@ -26,7 +26,8 @@ type JoyCon interface {
 	Battery() int8
 	ReadInto(out *CombinedState, includeGyro bool)
 
-	EnableIMU(status bool)
+	ChangeInputMode(mode InputMode) bool // returns false if impossible
+	EnableGyro(status bool)
 	SPIRead(addr uint32, len byte) ([]byte, error)
 
 	// Valid returns have alpha=255. If alpha=0 the value is not yet available.
@@ -103,4 +104,25 @@ const (
 
 type JoyConNotify interface {
 	JoyConUpdate(jc JoyCon, flags int)
+}
+
+type InputMode int
+
+const (
+	// the joycon pushes updates to button presses with the 0x3F command.
+	ModeLazyButtons InputMode = iota
+	// the host requests the current status with a 0x01 command.
+	ModeActivePolling
+	// the joycon pushes the current state at 60Hz. (0x3 0x30)
+	ModeStandard
+	// the joycon pushes large packets at 60Hz. (0x3 0x31)
+	ModeNFC
+)
+
+func (i InputMode) NeedsMode3() bool {
+	return i == ModeStandard || i == ModeNFC
+}
+
+func (i InputMode) NeedsEmptyRumbles() bool {
+	return i == ModeActivePolling
 }

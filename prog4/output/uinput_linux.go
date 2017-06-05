@@ -3,8 +3,11 @@ package output
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
+	"regexp"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -26,6 +29,12 @@ const size_t offset_of_value = offsetof(struct input_event, value);
 
 int write_uinput_setup(struct uinput_user_dev *setup, int fd) {
 	return write(fd, setup, sizeof(*setup));
+}
+
+int read_uinput_path(int fd, char *buf, size_t maxlen) {
+	return ioctl(fd,
+		UI_GET_SYSNAME(maxlen),
+		buf);
 }
 
 */
@@ -212,12 +221,15 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 	}
 
 	var version_a C.uint
-
-	version_b, err := o.ui_ioctl_r(C.UI_GET_VERSION, uintptr(unsafe.Pointer(&version_a)))
-	if err == nil && (version_a == 5 || version_b == 5) {
+	err = o.ui_ioctl(C.UI_GET_VERSION, uintptr(unsafe.Pointer(&version_a)))
+	if err == nil && (version_a == 5) {
 		err = o.setupNewKernel(m, name)
 	} else {
-		fmt.Printf("Using old uinput interface from before kernel 4.5 (%d %d %v)\n", version_a, version_b, err)
+		if version_a == 4 {
+			fmt.Println("Using old uinput interface from before kernel 4.5")
+		} else {
+			fmt.Println("[WARN] Could not determine uinput version, using old interface")
+		}
 		err = o.setupOldKernel(m, name)
 	}
 	if err != nil {
@@ -246,7 +258,47 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 		return nil, errors.Wrap(err, "ioctl uinput_create_device")
 	}
 
+	go func() {
+		time.Sleep(250*time.Millisecond)
+		err = o.setPermissions()
+		if err != nil {
+			fmt.Println("[WARN] Failed to set permissions:", err)
+		}
+	}()
+
 	return o, nil
+}
+
+var rgxDevInputName = regexp.MustCompile("^(event|js)(\\d+)$")
+
+func (o *uinput) setPermissions() error {
+	var buf [80]C.char
+	status, err := C.read_uinput_path(C.int(o.fd), &buf[0], C.size_t(79))
+	if status == -1 {
+		return errors.Wrap(err, "ioctl uinput_get_syspath")
+	}
+	buf[80-1] = 0
+	devName := C.GoString(&buf[0])
+	folder := fmt.Sprintf("/sys/devices/virtual/input/%s", devName)
+	f, err := os.Open(folder)
+	if err != nil {
+		return errors.Wrap(err, "open sysdevice")
+	}
+	list, err := f.Readdirnames(-1)
+	f.Close()
+	if err != nil {
+		return errors.Wrap(err, "list sysdevice folder")
+	}
+	for _, v := range list {
+		if m := rgxDevInputName.FindString(v); m != "" {
+			err = unix.Chmod(fmt.Sprintf("/dev/input/%s", m), 0664)
+			if err != nil {
+				return errors.Wrap(err, "chmod /dev/input device")
+			}
+			fmt.Println("set permissions for", m)
+		}
+	}
+	return nil
 }
 
 func (o *uinput) BeginUpdate() error {
@@ -295,6 +347,10 @@ func (o *uinput) GyroUpdate(vals jcpc.GyroFrame) {}
 func (o *uinput) FlushUpdate() error {
 	defer o.mu.Unlock()
 
+	if len(o.pending) == 0 {
+		return nil
+	}
+	fmt.Println("pushing", len(o.pending), "events")
 	buf := make([]byte, (1+len(o.pending))*C.sizeof_struct_input_event)
 	for i, v := range o.pending {
 		v.EncodeTo(buf[i*C.sizeof_struct_input_event:])
@@ -309,6 +365,7 @@ func (o *uinput) FlushUpdate() error {
 	if n != len(buf) {
 		fmt.Println("[!!] short uinput write", n)
 	}
+	o.pending = o.pending[:0]
 	return err
 }
 

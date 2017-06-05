@@ -287,7 +287,7 @@ func cmdEnableIMU(m *Manager, argv []string) {
 		enable = true
 	}
 
-	jc.EnableIMU(enable)
+	jc.EnableGyro(enable)
 }
 
 func cmdCustomSend(m *Manager, argv []string) {

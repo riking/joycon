@@ -17,6 +17,8 @@ type two struct {
 	lastUpdate time.Time
 	leftReady  bool
 	rightReady bool
+
+	stdTransitionDelay int8
 }
 
 func TwoJoyCons(left, right jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
@@ -26,6 +28,7 @@ func TwoJoyCons(left, right jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
 		base: base{
 			ui: ui,
 		},
+		stdTransitionDelay: 3,
 	}
 }
 
@@ -49,6 +52,10 @@ func (c *two) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 			if time.Since(c.lastUpdate) > 10*time.Millisecond {
 				bothReady = true
 			}
+		}
+		if bothReady {
+			c.leftReady = false
+			c.rightReady = false
 		}
 		c.mu.Unlock()
 
@@ -76,4 +83,12 @@ func (c *two) updateBoth() {
 	c.right.ReadInto(&c.curState, true)
 
 	c.dispatchUpdates()
+
+	if c.stdTransitionDelay > 0 {
+		c.stdTransitionDelay--
+		if c.stdTransitionDelay == 0 {
+			c.left.ChangeInputMode(jcpc.ModeStandard)
+			c.right.ChangeInputMode(jcpc.ModeStandard)
+		}
+	}
 }

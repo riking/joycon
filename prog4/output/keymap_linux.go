@@ -42,10 +42,10 @@ var linuxKeyNames = []linuxKeyCode{
 }
 
 var linuxAxisNames = []linuxKeyCode{
-	{"MainStickHoriz", C.ABS_X},
-	{"MainStickVertical", C.ABS_Y},
-	{"SecondStickHoriz", C.ABS_Z},
-	{"SecondStickVertical", C.ABS_RX},
+	{"MainStickHoriz", C.ABS_Z},
+	{"MainStickVertical", C.ABS_RX},
+	{"SecondStickHoriz", C.ABS_RY},
+	{"SecondStickVertical", C.ABS_RZ},
 }
 
 var linuxKeyMap = make(map[string]uint16)

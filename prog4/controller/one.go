@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -16,6 +17,8 @@ type one struct {
 	lastUpdate time.Time
 
 	prevBattery int8
+
+	stdTransitionDelay int8
 }
 
 func OneJoyCon(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
@@ -24,6 +27,7 @@ func OneJoyCon(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
 		base: base{
 			ui: ui,
 		},
+		stdTransitionDelay: 3,
 	}
 }
 
@@ -33,6 +37,7 @@ func (c *one) Rumble(data []jcpc.RumbleData) {
 
 func (c *one) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	if flags&jcpc.NotifyInput != 0 {
+		fmt.Println("doing update")
 		c.update()
 	}
 
@@ -52,4 +57,11 @@ func (c *one) update() {
 	c.jc.ReadInto(&c.curState, true)
 
 	c.dispatchUpdates()
+
+	if c.stdTransitionDelay > 0 {
+		c.stdTransitionDelay--
+		if c.stdTransitionDelay == 0 {
+			c.jc.ChangeInputMode(jcpc.ModeStandard)
+		}
+	}
 }
