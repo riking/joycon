@@ -13,10 +13,13 @@ import (
 	"github.com/riking/joycon/prog4/joycon"
 )
 
+const maxControllerCount = 4
+
 type outputController struct {
-	c  jcpc.Controller
-	o  jcpc.Output
-	jc []jcpc.JoyCon
+	pNum int
+	c    jcpc.Controller
+	o    jcpc.Output
+	jc   []jcpc.JoyCon
 }
 
 type unpairedController struct {
@@ -105,6 +108,21 @@ func (m *Manager) OnFrame() {
 	}
 }
 
+// must be called locked
+func (m *Manager) assignPlayerNumber() int {
+	var used [maxControllerCount]bool
+
+	for _, v := range m.paired {
+		used[v.pNum-1] = true
+	}
+	for i := 0; i < maxControllerCount; i++ {
+		if !used[i] {
+			return i + 1
+		}
+	}
+	return 0
+}
+
 var (
 	buttonsSLSR_R = jcpc.ButtonState{byte((jcpc.Button_R_SL | jcpc.Button_R_SR) & 0xFF), 0, 0}
 	buttonsSLSR_L = jcpc.ButtonState{0, 0, byte((jcpc.Button_L_SL | jcpc.Button_L_SR) & 0xFF)}
@@ -139,14 +157,16 @@ func (m *Manager) doPairing(idx1, idx2 int) {
 }
 
 func (m *Manager) doPairing_(idx1, idx2 int) {
-	o, err := m.outputFactory.New(true)
-	if err != nil {
-		fmt.Println("[FATAL] Failed to create controller output:", err)
-		os.Exit(1)
-	}
+	pNum := m.assignPlayerNumber()
+
 	if idx2 == -1 && m.unpaired[idx1].jc.Type() != jcpc.TypeBoth {
 		fmt.Println("pairing single")
 		jc := m.unpaired[idx1].jc
+		o, err := m.outputFactory(jc.Type(), pNum)
+		if err != nil {
+			fmt.Println("[FATAL] Failed to create controller output:", err)
+			os.Exit(1)
+		}
 		c := controller.OneJoyCon(jc, m)
 		c.BindToOutput(o)
 		jc.BindToController(c)
@@ -154,10 +174,16 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 			c:  c,
 			o:  o,
 			jc: []jcpc.JoyCon{jc},
+			pNum: pNum,
 		})
 	} else if idx2 == -1 {
 		fmt.Println("pairing pro")
 		jc := m.unpaired[idx1].jc
+		o, err := m.outputFactory(jcpc.TypeBoth, pNum)
+		if err != nil {
+			fmt.Println("[FATAL] Failed to create controller output:", err)
+			os.Exit(1)
+		}
 		c := controller.Pro(jc, m)
 		c.BindToOutput(o)
 		jc.BindToController(c)
@@ -165,11 +191,17 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 			c:  c,
 			o:  o,
 			jc: []jcpc.JoyCon{jc},
+			pNum: pNum,
 		})
 	} else {
 		fmt.Println("pairing double")
 		jc1 := m.unpaired[idx1].jc
 		jc2 := m.unpaired[idx2].jc
+		o, err := m.outputFactory(jcpc.TypeBoth, pNum)
+		if err != nil {
+			fmt.Println("[FATAL] Failed to create controller output:", err)
+			os.Exit(1)
+		}
 		var c jcpc.Controller
 		if jc1.Type().IsLeft() {
 			c = controller.TwoJoyCons(jc1, jc2, m)
@@ -183,17 +215,20 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 			c:  c,
 			o:  o,
 			jc: []jcpc.JoyCon{jc1, jc2},
+			pNum: pNum,
 		})
 	}
 	m.fixPlayerLights()
 }
 
+var playerLightSeq = []byte{0xF0, 0x01, 0x03, 0x07, 0x0F, 0x05, 0x09, 0x06, 0x0A}
+
 func (m *Manager) fixPlayerLights() {
 	// TODO separate business logic and moving arrays around
 	// Fix player lights
-	for i, c := range m.paired {
+	for _, c := range m.paired {
 		for _, jc := range c.jc {
-			jcpc.SetPlayerLights(jc, (1<<uint(i+1))-1)
+			jcpc.SetPlayerLights(jc, playerLightSeq[c.pNum])
 		}
 	}
 

@@ -14,13 +14,9 @@ type consoleFactory struct {
 	i int
 }
 
-func NewConsoleFactory() jcpc.OutputFactory {
-	return &consoleFactory{}
-}
 
-func (f *consoleFactory) New(bool) (jcpc.Output, error) {
-	f.i++
-	return &consoleOutput{i: f.i}, nil
+func NewConsole(t jcpc.JoyConType, playerNum int) (jcpc.Output, error) {
+	return &consoleOutput{i: playerNum}, nil
 }
 
 func (c *consoleOutput) BeginUpdate() error {

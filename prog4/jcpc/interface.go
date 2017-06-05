@@ -66,9 +66,7 @@ type Output interface {
 	Close() error
 }
 
-type OutputFactory interface {
-	New(isSingleJoyCon bool) (Output, error)
-}
+type OutputFactory func(t JoyConType, playerNum int) (Output, error)
 
 type Interface interface {
 	JoyConNotify
