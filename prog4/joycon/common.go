@@ -45,13 +45,33 @@ type calibrationData struct {
 	vtNeu, vtDead int8
 }
 
-const magnitudeMax = 1.05
+const magnitudeMax = 1.0
 
 var fakeCalibrationData = calibrationData{
 	hzMin: -80, hzMax: 80,
-	vtMin: 80, vtMax: 80,
-	hzNeu: 0,
-	vtNeu: 0,
+	vtMin: -80, vtMax: 80,
+	hzNeu: 0, hzDead: 4,
+	vtNeu: 0, vtDead: 4,
+}
+
+func cachedCalibration(serial string) *calibrationData {
+	switch serial {
+	case "98:b6:e9:74:1b:22":
+		return &calibrationData{
+			hzMin: -90, vtMin: -50,
+			hzMax: 66, vtMax: 82,
+			hzNeu: -14, vtNeu: 17,
+			hzDead: 5, vtDead: 4,
+		}
+	case "98:b6:e9:34:d5:c2":
+		return &calibrationData{
+			hzMin: -77, vtMin: -78,
+			hzMax: 57, vtMax: 60,
+			hzNeu: 6, vtNeu: -10,
+			hzDead: 2, vtDead: 2,
+		}
+	}
+	return nil
 }
 
 func (_c *calibrationData) Adjust(rawStick [2]uint8) [2]int8 {
@@ -59,11 +79,22 @@ func (_c *calibrationData) Adjust(rawStick [2]uint8) [2]int8 {
 	if c == nil {
 		c = &fakeCalibrationData
 	}
+
+	// TODO find the actual calibration algorithm
+	// and load the coefficients from the joycon spi flash
+
 	var hzRaw = 0x80 - int16(rawStick[0])
 	var vtRaw = 0x80 - int16(rawStick[1])
 
 	hzOffset := hzRaw - int16(c.hzNeu)
 	vtOffset := vtRaw - int16(c.vtNeu)
+
+	if int16(-c.hzDead) < hzOffset && hzOffset < int16(c.hzDead) {
+		hzOffset = 0
+	}
+	if int16(-c.vtDead) < vtOffset && vtOffset < int16(c.vtDead) {
+		vtOffset = 0
+	}
 
 	var hzStretch, vtStretch float64
 	if hzOffset > 0 {
@@ -82,13 +113,21 @@ func (_c *calibrationData) Adjust(rawStick [2]uint8) [2]int8 {
 		angle := math.Atan2(vtStretch, hzStretch)
 		hzStretch = math.Cos(angle) * magnitudeMax
 		vtStretch = math.Sin(angle) * magnitudeMax
-		if hzStretch > 1 {
-			hzStretch = 1
-		}
-		if vtStretch > 1 {
-			vtStretch = 1
-		}
 	}
 
-	return [2]int8{int8(hzStretch * 127), int8(vtStretch * 127)}
+	if hzStretch > 1 {
+		hzStretch = 1
+	}
+	if hzStretch < -1 {
+		hzStretch = -1
+	}
+	if vtStretch > 1 {
+		vtStretch = 1
+	}
+	if vtStretch < -1 {
+		vtStretch = -1
+	}
+
+	ret := [2]int8{int8(hzStretch * 127), int8(vtStretch * 127)}
+	return ret
 }

@@ -61,6 +61,11 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 		return nil, err
 	}
 	jc.side = side
+	if side == jcpc.TypeLeft {
+		jc.calib[0] = cachedCalibration(jc.serial)
+	} else if side == jcpc.TypeRight {
+		jc.calib[1] = cachedCalibration(jc.serial)
+	}
 	jc.controller = nil
 	jc.haveColors = false
 	jc.mode = jcpc.ModeLazyButtons

@@ -39,7 +39,7 @@ var MappingL = ControllerMapping{
 		{jcpc.Button_L_Stick, "GamepadLStick"},
 	},
 	Axes: []commonStickMap{
-		{jcpc.Axis_L_Vertical, true, "MainStickHoriz"},
+		{jcpc.Axis_L_Vertical, false, "MainStickHoriz"},
 		{jcpc.Axis_L_Horiz, true, "MainStickVertical"},
 	},
 }
@@ -61,7 +61,7 @@ var MappingR = ControllerMapping{
 		{jcpc.Button_R_Stick, "GamepadLStick"},
 	},
 	Axes: []commonStickMap{
-		{jcpc.Axis_R_Vertical, false, "MainStickHoriz"},
+		{jcpc.Axis_R_Vertical, true, "MainStickHoriz"},
 		{jcpc.Axis_R_Horiz, false, "MainStickVertical"},
 	},
 }
