@@ -29,6 +29,7 @@ type JoyCon interface {
 	ChangeInputMode(mode InputMode) bool // returns false if impossible
 	EnableGyro(status bool)
 	SPIRead(addr uint32, len byte) ([]byte, error)
+	SPIWrite(addr uint32, p []byte) (error)
 
 	// Valid returns have alpha=255. If alpha=0 the value is not yet available.
 	CaseColor() color.RGBA

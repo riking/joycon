@@ -202,6 +202,7 @@ var _ = addCommand(cmdSetPlayerLights, "Set the player lights on the JoyCon", "s
 var _ = addCommand(cmdSetHomeLights, "Set the home light pattern.", "setHomeLights")
 var _ = addCommand(cmdEnableIMU, "Enable/disable IMU.", "imu")
 var _ = addCommand(cmdSPIDump, "Read from SPI flash.", "read")
+var _ = addCommand(cmdSPIWrite, "Write to SPI flash.", "write")
 var _ = addCommand(cmdCustomSend, "Send a subcommand packet.", "send")
 
 func cmdList(m *Manager, argv []string) {
@@ -344,7 +345,7 @@ func cmdSPIDump(m *Manager, argv []string) {
 		return
 	}
 
-	if len(argv) == 0 {
+	if len(argv) < 2 {
 		fmt.Println("please specify the range: read [jc] [start=0x6000] [size=0x0100] [outfile=stdout]")
 		return
 	}
@@ -366,4 +367,45 @@ func cmdSPIDump(m *Manager, argv []string) {
 	} else {
 		fmt.Printf("SPI read %06x %d data:\n%s\n", start, size, hex.Dump(b))
 	}
+}
+
+
+func cmdSPIWrite(m *Manager, argv []string) {
+	jc, argv, err := selectJoyCon(m, argv)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if len(argv) < 3 {
+		fmt.Println("please specify the range: read [jc] [start=0x6000] [size=0x0100] [outfile=stdout]")
+		return
+	}
+
+	start, err := strconv.ParseInt(argv[0], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[0], err)
+		return
+	}
+	size, err := strconv.ParseInt(argv[1], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[1], err)
+		return
+	}
+
+	if len(argv) != int(2 + size) {
+		fmt.Println("wrong number of data bytes")
+		return
+	}
+
+	pattern := make([]byte, size)
+	for i := range pattern {
+		val, err := strconv.ParseUint(argv[2+i], 0, 8)
+		if err != nil {
+			fmt.Println("invalid number", argv[2+i], err)
+		}
+		pattern[i] = byte(val)
+	}
+
+	fmt.Println(jc.SPIWrite(uint32(start), pattern))
 }

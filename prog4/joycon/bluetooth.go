@@ -10,6 +10,7 @@ import (
 
 	"github.com/GeertJohan/go.hid"
 	"github.com/riking/joycon/prog4/jcpc"
+	"github.com/pkg/errors"
 )
 
 type joyconBluetooth struct {
@@ -201,6 +202,19 @@ func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (jc *joyconBluetooth) SPIWrite(addr uint32, p []byte) (error) {
+	if len(p) > jcpc.SPIMaxData {
+		return errors.Errorf("len over maximum")
+	}
+	cmd := make([]byte, 6 + len(p))
+	cmd[0] = 0x11
+	binary.LittleEndian.PutUint32(cmd[1:], addr)
+	cmd[5] = byte(len(p))
+	copy(cmd[6:], p)
+	jc.queueSubcommand(cmd)
+	return nil
 }
 
 func (jc *joyconBluetooth) BindToController(c jcpc.Controller) {
@@ -582,6 +596,10 @@ func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
 		jc.buttonColor.G = data[4]
 		jc.buttonColor.B = data[5]
 		jc.buttonColor.A = 255
+		jc.mu.Unlock()
+	} else if addr == 0x2024 && length == 0x1C {
+		// ParseCalibrationData
+		jc.mu.Lock()
 		jc.mu.Unlock()
 	}
 

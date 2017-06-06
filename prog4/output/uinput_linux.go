@@ -330,20 +330,27 @@ func (o *uinput) ButtonUpdate(b jcpc.ButtonID, state bool) {
 func (o *uinput) StickUpdate(axis jcpc.AxisID, value int8) {
 	var code uint16
 	var ok bool
+	var invert bool
 
 	for _, e := range o.axes {
 		if e.Axis == axis {
 			code, ok = linuxKeyMap[e.Name]
+			invert = e.Invert
 			break
 		}
 	}
 	if !ok {
 		return
 	}
+
+	val := int32(value)
+	if invert {
+		val = -val
+	}
 	o.pending = append(o.pending, uinputEvent{
 		Type:  C.EV_ABS,
 		Code:  code,
-		Value: int32(value),
+		Value: val,
 	})
 }
 
