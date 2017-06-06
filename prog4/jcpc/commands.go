@@ -43,7 +43,7 @@ func SPIFlashWrite(jc JoyCon, addr uint16, p []byte) error {
 func largeSPIRead(jc JoyCon, addr, size uint32) ([]byte, error) {
 	buf := make([]byte, size)
 
-	const jobNum = 2
+	const jobNum = 3
 	type work struct {
 		Off uint32
 		Len byte

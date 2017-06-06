@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/GeertJohan/go.hid"
-	"github.com/riking/joycon/prog4/jcpc"
 	"github.com/pkg/errors"
+	"github.com/riking/joycon/prog4/jcpc"
 )
 
 type joyconBluetooth struct {
@@ -31,8 +31,9 @@ type joyconBluetooth struct {
 	ui         jcpc.Interface
 
 	battery   int8
-	raw_stick [2][2]byte
 	buttons   jcpc.ButtonState
+	raw_stick [2][2]byte
+	calib     [2]*calibrationData
 	haveGyro  bool
 	gyro      [3]jcpc.GyroFrame
 
@@ -147,10 +148,10 @@ func (jc *joyconBluetooth) ReadInto(out *jcpc.CombinedState, includeGyro bool) {
 	out.Buttons = out.Buttons.Union(jc.buttons)
 	// TODO send CALIBRATED stick data
 	if jc.side.IsLeft() {
-		out.RawSticks[0] = jc.raw_stick[0]
+		out.AdjSticks[0] = jc.calib[0].Adjust(jc.raw_stick[0])
 	}
 	if jc.side.IsRight() {
-		out.RawSticks[1] = jc.raw_stick[1]
+		out.AdjSticks[1] = jc.calib[1].Adjust(jc.raw_stick[1])
 	}
 
 	if includeGyro && jc.haveGyro {
@@ -204,11 +205,11 @@ func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
 	}
 }
 
-func (jc *joyconBluetooth) SPIWrite(addr uint32, p []byte) (error) {
+func (jc *joyconBluetooth) SPIWrite(addr uint32, p []byte) error {
 	if len(p) > jcpc.SPIMaxData {
 		return errors.Errorf("len over maximum")
 	}
-	cmd := make([]byte, 6 + len(p))
+	cmd := make([]byte, 6+len(p))
 	cmd[0] = 0x11
 	binary.LittleEndian.PutUint32(cmd[1:], addr)
 	cmd[5] = byte(len(p))

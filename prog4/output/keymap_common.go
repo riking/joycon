@@ -20,6 +20,7 @@ type ControllerMapping struct {
 
 // https://w3c.github.io/gamepad/#remapping
 // JoyCons are negative left/down, positive up/right (docked orientation)
+// System expects negative left/up, positive right/down
 
 var MappingL = ControllerMapping{
 	Keys: []commonKeyMap{
@@ -39,7 +40,7 @@ var MappingL = ControllerMapping{
 	},
 	Axes: []commonStickMap{
 		{jcpc.Axis_L_Vertical, true, "MainStickHoriz"},
-		{jcpc.Axis_L_Horiz, false, "MainStickVertical"},
+		{jcpc.Axis_L_Horiz, true, "MainStickVertical"},
 	},
 }
 
@@ -61,7 +62,7 @@ var MappingR = ControllerMapping{
 	},
 	Axes: []commonStickMap{
 		{jcpc.Axis_R_Vertical, false, "MainStickHoriz"},
-		{jcpc.Axis_R_Horiz, true, "MainStickVertical"},
+		{jcpc.Axis_R_Horiz, false, "MainStickVertical"},
 	},
 }
 
@@ -97,8 +98,8 @@ var MappingDual = ControllerMapping{
 	},
 	Axes: []commonStickMap{
 		{jcpc.Axis_L_Horiz, false, "MainStickHoriz"},
-		{jcpc.Axis_L_Vertical, false, "MainStickVertical"},
+		{jcpc.Axis_L_Vertical, true, "MainStickVertical"},
 		{jcpc.Axis_R_Horiz, false, "SecondStickHoriz"},
-		{jcpc.Axis_R_Vertical, false, "SecondStickVertical"},
+		{jcpc.Axis_R_Vertical, true, "SecondStickVertical"},
 	},
 }

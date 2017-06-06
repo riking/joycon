@@ -38,8 +38,8 @@ func (c *base) dispatchUpdates() {
 		}
 	}
 	for i := 0; i < 4; i++ {
-		if c.prevState.RawSticks[i/2][i%2] != c.curState.RawSticks[i/2][i%2] {
-			c.output.StickUpdate(jcpc.AxisID(i), int8(c.curState.RawSticks[i/2][i%2]-0x80))
+		if c.prevState.AdjSticks[i/2][i%2] != c.curState.AdjSticks[i/2][i%2] {
+			c.output.StickUpdate(jcpc.AxisID(i), c.curState.AdjSticks[i/2][i%2])
 		}
 	}
 	if c.curState.Gyro != jcpc.GyroZero {

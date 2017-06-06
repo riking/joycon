@@ -369,7 +369,6 @@ func cmdSPIDump(m *Manager, argv []string) {
 	}
 }
 
-
 func cmdSPIWrite(m *Manager, argv []string) {
 	jc, argv, err := selectJoyCon(m, argv)
 	if err != nil {
@@ -393,7 +392,7 @@ func cmdSPIWrite(m *Manager, argv []string) {
 		return
 	}
 
-	if len(argv) != int(2 + size) {
+	if len(argv) != int(2+size) {
 		fmt.Println("wrong number of data bytes")
 		return
 	}

@@ -2,6 +2,7 @@ package joycon
 
 import (
 	"context"
+	"math"
 
 	"github.com/riking/joycon/prog4/jcpc"
 )
@@ -34,8 +35,60 @@ type spiReadCallback struct {
 00000010  03 45 f7 1a fd a3 1e f6  7b c1 1f a2
 
 95 22 = calibration data, probably
- */
+*/
 
 type calibrationData struct {
+	// fake struct to get started
+	hzMin, hzMax  int8
+	vtMin, vtMax  int8
+	hzNeu, hzDead int8
+	vtNeu, vtDead int8
+}
 
+const magnitudeMax = 1.05
+
+var fakeCalibrationData = calibrationData{
+	hzMin: -80, hzMax: 80,
+	vtMin: 80, vtMax: 80,
+	hzNeu: 0,
+	vtNeu: 0,
+}
+
+func (_c *calibrationData) Adjust(rawStick [2]uint8) [2]int8 {
+	c := _c
+	if c == nil {
+		c = &fakeCalibrationData
+	}
+	var hzRaw = 0x80 - int16(rawStick[0])
+	var vtRaw = 0x80 - int16(rawStick[1])
+
+	hzOffset := hzRaw - int16(c.hzNeu)
+	vtOffset := vtRaw - int16(c.vtNeu)
+
+	var hzStretch, vtStretch float64
+	if hzOffset > 0 {
+		hzStretch = float64(hzOffset) / float64(c.hzMax-c.hzNeu)
+	} else {
+		hzStretch = float64(hzOffset) / float64(c.hzNeu-c.hzMin)
+	}
+	if vtOffset > 0 {
+		vtStretch = float64(vtOffset) / float64(c.vtMax-c.vtNeu)
+	} else {
+		vtStretch = float64(vtOffset) / float64(c.vtNeu-c.vtMin)
+	}
+
+	magnitude := hzStretch*hzStretch + vtStretch*vtStretch
+	if magnitude > magnitudeMax {
+		angle := math.Atan2(vtStretch, hzStretch)
+		hzStretch = math.Cos(angle) * magnitudeMax
+		vtStretch = math.Sin(angle) * magnitudeMax
+		if hzStretch > 1 {
+			hzStretch = 1
+		}
+		if vtStretch > 1 {
+			vtStretch = 1
+		}
+	}
+
+	return [2]int8{int8(hzStretch * 127), int8(vtStretch * 127)}
 }
