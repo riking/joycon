@@ -2,6 +2,8 @@ package main
 
 import (
 	"runtime"
+	"time"
+	"fmt"
 
 	"github.com/riking/joycon/prog4/consoleiface"
 )
@@ -12,4 +14,9 @@ func main() {
 
 	iface := consoleiface.New(getOutputFactory())
 	iface.Run()
+
+	defer func() {
+		fmt.Println("exiting...")
+		time.Sleep(2*time.Second)
+	}()
 }

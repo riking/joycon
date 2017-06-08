@@ -24,7 +24,7 @@ func filterCtrlZ(r rune) (rune, bool) {
 
 func (m *Manager) readStdin() {
 	l, err := readline.NewEx(&readline.Config{
-		Prompt:          "\033[1m[console]\033[m> ",
+		Prompt:          "\033[1m[console]\033[0m> ",
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
 

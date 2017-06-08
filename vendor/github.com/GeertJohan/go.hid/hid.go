@@ -20,9 +20,9 @@ typedef struct hid_device_info hid_device_info;
 import "C"
 
 import (
-	"errors"
 	"unsafe"
 
+	"github.com/pkg/errors"
 	"github.com/GeertJohan/cgo.wchar"
 )
 
@@ -258,7 +258,15 @@ func OpenPath(path string) (*Device, error) {
 	// call hid_open_path and check for error
 	dev := C.hid_open_path(cPath)
 	if dev == nil {
-		return nil, errors.New("Could not open device by path.")
+		var errStr *C.wchar_t = C.hid_error(nil)
+		if errStr != nil {
+			e, err := wcharToGoString(errStr)
+			if err != nil {
+				return nil, errors.Errorf("Could not open device: error converting error string: %s", err)
+			}
+			return nil, errors.Errorf("Could not open device: %s", e)
+		}
+		return nil, errors.Errorf("Could not open device by path.")
 	}
 
 	d := &Device{
@@ -644,7 +652,7 @@ func (dev *Device) lastError() error {
 	if str == "" {
 		return nil
 	}
-	return errors.New(str)
+	return errors.Errorf("hidapi: %s", str)
 }
 
 func (dev *Device) lastErrorString() string {
@@ -662,5 +670,5 @@ func (dev *Device) lastErrorString() string {
 // AttemptGrab attempts to "grab" the device for exclusive access by the program, so
 // no other program sees its input. If the parameter is false, any existing grab will be released.
 func (dev *Device) AttemptGrab(grab bool) error {
-	return errors.New("NotImplemented")
+	return errors.Errorf("NotImplemented")
 }

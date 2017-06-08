@@ -58,6 +58,7 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <wchar.h>
 
 
 #include "hidapi.h"
@@ -127,7 +128,7 @@ struct hid_device_ {
 		BOOL blocking;
 		USHORT output_report_length;
 		size_t input_report_length;
-		void *last_error_str;
+		wchar_t *last_error_str;
 		DWORD last_error_num;
 		BOOL read_pending;
 		char *read_buf;
@@ -155,10 +156,12 @@ static void free_hid_device(hid_device *dev)
 {
 	CloseHandle(dev->ol.hEvent);
 	CloseHandle(dev->device_handle);
-	LocalFree(dev->last_error_str);
+	free(dev->last_error_str);
 	free(dev->read_buf);
 	free(dev);
 }
+
+static wchar_t *nulldev_last_error_str = 0;
 
 static void register_error(hid_device *device, const char *op)
 {
@@ -172,6 +175,8 @@ static void register_error(hid_device *device, const char *op)
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPVOID)&msg, 0/*sz*/,
 		NULL);
+
+	printf("error %p %s: %ls", device, op, msg);
 	
 	/* Get rid of the CR and LF that FormatMessage() sticks at the
 	   end of the message. Thanks Microsoft! */
@@ -184,10 +189,23 @@ static void register_error(hid_device *device, const char *op)
 		ptr++;
 	}
 
+	DWORD length;
+	WCHAR *finalstr;
+	// %s: %s
+	length = strlen(op) + 2 + wcslen(msg);
+	finalstr = calloc(sizeof(wchar_t), length + 2);
+	swprintf(finalstr, length + 1, L"%hs: %ls", op, msg);
+	LocalFree(msg);
+
 	/* Store the message off in the Device entry so that
 	   the hid_error() function can pick it up. */
-	LocalFree(device->last_error_str);
-	device->last_error_str = msg;
+	if (device) {
+		free(device->last_error_str);
+		device->last_error_str = finalstr;
+	} else {
+		free(nulldev_last_error_str);
+		nulldev_last_error_str = finalstr;
+	}
 }
 
 #ifndef HIDAPI_USE_DDK
@@ -219,9 +237,7 @@ static HANDLE open_device(const char *path, BOOL enumerate)
 {
 	HANDLE handle;
 	DWORD desired_access = (enumerate)? 0: (GENERIC_WRITE | GENERIC_READ);
-	DWORD share_mode = (enumerate)?
-	                      FILE_SHARE_READ|FILE_SHARE_WRITE:
-	                      FILE_SHARE_READ;
+	DWORD share_mode = FILE_SHARE_READ|FILE_SHARE_WRITE;
 
 	handle = CreateFileA(path,
 		desired_access,
@@ -551,6 +567,7 @@ HID_API_EXPORT hid_device * HID_API_CALL hid_open_path(const char *path)
 	BOOLEAN res;
 	NTSTATUS nt_res;
 
+printf("Opening device at path '%s'\n", path);
 	if (hid_init() < 0) {
 		return NULL;
 	}
@@ -558,24 +575,24 @@ HID_API_EXPORT hid_device * HID_API_CALL hid_open_path(const char *path)
 	dev = new_hid_device();
 
 	/* Open a handle to the device */
-	dev->device_handle = open_device(path, FALSE);
+	dev->device_handle = open_device(path, TRUE);
 
 	/* Check validity of write_handle. */
 	if (dev->device_handle == INVALID_HANDLE_VALUE) {
 		/* Unable to open the device. */
-		register_error(dev, "CreateFile");
+		register_error(NULL, "CreateFile");
 		goto err;
 	}
 
 	/* Get the Input Report length for the device. */
 	res = HidD_GetPreparsedData(dev->device_handle, &pp_data);
 	if (!res) {
-		register_error(dev, "HidD_GetPreparsedData");
+		register_error(NULL, "HidD_GetPreparsedData");
 		goto err;
 	}
 	nt_res = HidP_GetCaps(pp_data, &caps);
 	if (nt_res != HIDP_STATUS_SUCCESS) {
-		register_error(dev, "HidP_GetCaps");	
+		register_error(NULL, "HidP_GetCaps");	
 		goto err_pp_data;
 	}
 	dev->output_report_length = caps.OutputReportByteLength;
@@ -848,6 +865,9 @@ int HID_API_EXPORT_CALL HID_API_CALL hid_get_indexed_string(hid_device *dev, int
 
 HID_API_EXPORT const wchar_t * HID_API_CALL  hid_error(hid_device *dev)
 {
+	if (!dev) {
+		return nulldev_last_error_str;
+	}
 	return (wchar_t*)dev->last_error_str;
 }
 
