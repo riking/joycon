@@ -255,7 +255,7 @@ func (dev *Device) Read(p []byte) (n int, err error) {
 			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
 				Events: unix.EPOLLIN,
 				Fd:     int32(dev.fd),
-			}}, 16)
+			}}, 1)
 			if pErr != nil {
 				fmt.Println("poll error:", pErr)
 			}
@@ -332,19 +332,18 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 }
 
 func (dev *Device) AttemptGrab(grab bool) error {
-	var param C.int = 0
+	// this won't work because the fd is a hidraw fd, not a input fd
+	var param uintptr = 0
 	if grab {
 		param = 1
 	}
 	return nil
-	fmt.Println("grab", grab)
 	status, _, err := unix.Syscall(syscall.SYS_IOCTL,
 		uintptr(dev.fd),
 		uintptr(C.EVIOCGRAB),
 		uintptr(unsafe.Pointer(&param)))
 	if status != 0 {
 		fmt.Println("grab error", err)
-		return err
 	}
 	dev.grab = grab
 	return nil
