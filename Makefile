@@ -18,7 +18,7 @@ SRCS = $(addprefix src/, $(SRCFILES))
 HEADS = $(addprefix src/, $(HEADFILES))
 OBJS = $(SRCS:.c=.o)
 
-all: jcmapper
+all: jcmapper jcdriver
 
 format: $(SRCS) $(HEADS) switchconnect/main.c
 	clang-format -style=file -i $^
@@ -27,6 +27,12 @@ clean:
 	rm -f $(OBJS)
 	rm -f devinput/hidapi_demo.o
 	rm -f switchconnect/main.o
+
+GOBIN ?= $(GOPATH)/bin
+
+jcdriver: prog4
+	go install -v ./prog4/jcdriver
+	cp $(GOBIN)/jcdriver .
 
 jcmapper: $(OBJS)
 	gcc -o $@ $^ $(LDFLAGS)
