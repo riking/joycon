@@ -209,6 +209,8 @@ func NewUInput(m ControllerMapping, name string) (jcpc.Output, error) {
 		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")
 	}
 	err = o.ui_ioctl(C.UI_SET_EVBIT, C.EV_ABS)
+	err = o.ui_ioctl(C.UI_SET_ABSBIT, C.ABS_X)
+	err = o.ui_ioctl(C.UI_SET_ABSBIT, C.ABS_Y)
 	if err != nil {
 		unix.Close(fd)
 		return nil, errors.Wrap(err, "ioctl uinput_set_eventbit")

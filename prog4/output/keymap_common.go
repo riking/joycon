@@ -98,9 +98,9 @@ var MappingDual = ControllerMapping{
 		{jcpc.Button_L_Stick, "GamepadLStick"},
 	},
 	Axes: []commonStickMap{
-		{jcpc.Axis_L_Horiz, false, "MainStickHoriz"},
+		{jcpc.Axis_L_Horiz, true, "MainStickHoriz"},
 		{jcpc.Axis_L_Vertical, false, "MainStickVertical"},
-		{jcpc.Axis_R_Horiz, false, "SecondStickHoriz"},
+		{jcpc.Axis_R_Horiz, true, "SecondStickHoriz"},
 		{jcpc.Axis_R_Vertical, false, "SecondStickVertical"},
 	},
 }
