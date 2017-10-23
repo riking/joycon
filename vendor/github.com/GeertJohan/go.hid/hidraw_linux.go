@@ -32,6 +32,12 @@ int get_ioctl_get_feature(int length) {
 	return HIDIOCGFEATURE(length);
 }
 
+int hidraw_get_bdaddr(int fd, char *buf, size_t maxlen) {
+	return ioctl(fd,
+		HIDIOCGRAWNAME(maxlen),
+		buf);
+}
+
 */
 import "C"
 

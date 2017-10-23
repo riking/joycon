@@ -16,6 +16,12 @@ func notify(jc jcpc.JoyCon, flags int, notify ...jcpc.JoyConNotify) {
 	}
 }
 
+func decodeUint12(b []byte) (uint16, uint16) {
+	d1 := uint16(b[0]) | (uint16(b[1] & 0xF) << 8)
+	d2 := uint16(b[1] >> 4) | (uint16(b[2]) << 4)
+	return d1, d2
+}
+
 type spiReadCallback struct {
 	F       func([]byte, error)
 	Ctx     context.Context
@@ -38,96 +44,90 @@ type spiReadCallback struct {
 */
 
 type calibrationData struct {
-	// fake struct to get started
-	hzMin, hzMax  int8
-	vtMin, vtMax  int8
-	hzNeu, hzDead int8
-	vtNeu, vtDead int8
+	xMaxOff, yMaxOff uint16
+	xCenter, yCenter uint16
+	xMinOff, yMinOff uint16
+}
+
+func (c *calibrationData) Parse(b []byte) {
+	c.xMaxOff, c.yMaxOff = decodeUint12(b[0:3])
+	c.xCenter, c.yCenter = decodeUint12(b[3:6])
+	c.xMinOff, c.yMinOff = decodeUint12(b[6:9])
 }
 
 const magnitudeMax = 1.0
 
 var fakeCalibrationData = calibrationData{
-	hzMin: -80, hzMax: 80,
-	vtMin: -80, vtMax: 80,
-	hzNeu: 0, hzDead: 4,
-	vtNeu: 0, vtDead: 4,
+	xCenter: 0x800, yCenter: 0x800,
+	xMaxOff: 0x400, yMaxOff: 0x400,
+	xMinOff: 0x400, yMinOff: 0x400,
 }
 
+const desiredRange = 0x7FF
+
 func cachedCalibration(serial string) *calibrationData {
-	switch serial {
-	case "98:b6:e9:74:1b:22":
-		return &calibrationData{
-			hzMin: -90, vtMin: -50,
-			hzMax: 66, vtMax: 82,
-			hzNeu: -14, vtNeu: 17,
-			hzDead: 5, vtDead: 4,
-		}
-	case "98:b6:e9:34:d5:c2":
-		return &calibrationData{
-			hzMin: -77, vtMin: -78,
-			hzMax: 57, vtMax: 60,
-			hzNeu: 6, vtNeu: -10,
-			hzDead: 2, vtDead: 2,
-		}
-	}
 	return nil
 }
 
-func (_c *calibrationData) Adjust(rawStick [2]uint8) [2]int8 {
+// Changes raw stick values into [-0x7FF, +0x7FF] values.
+func (_c *calibrationData) Adjust(rawStick [2]uint16) [2]int16 {
 	c := _c
 	if c == nil {
 		c = &fakeCalibrationData
+	} else if c.xCenter == 0 {
+		c = &fakeCalibrationData
 	}
 
-	// TODO find the actual calibration algorithm
-	// and load the coefficients from the joycon spi flash
-
-	var hzRaw = 0x80 - int16(rawStick[0])
-	var vtRaw = 0x80 - int16(rawStick[1])
-
-	hzOffset := hzRaw - int16(c.hzNeu)
-	vtOffset := vtRaw - int16(c.vtNeu)
-
-	if int16(-c.hzDead) < hzOffset && hzOffset < int16(c.hzDead) {
-		hzOffset = 0
-	}
-	if int16(-c.vtDead) < vtOffset && vtOffset < int16(c.vtDead) {
-		vtOffset = 0
-	}
-
-	var hzStretch, vtStretch float64
-	if hzOffset > 0 {
-		hzStretch = float64(hzOffset) / float64(c.hzMax-c.hzNeu)
+	var out [2]int16
+	// careful - need to upcast to int before multiplying
+	// 1. convert to signed
+	// 2. subtract center value
+	// 3. widen to int (!)
+	// 4. multiply by desiredRange
+	// 5. divide by range-from-center
+	if rawStick[0] < c.xCenter {
+		out[0] = int16(int((int16(rawStick[0]) - int16(c.xCenter))) * desiredRange / int(c.xMinOff))
 	} else {
-		hzStretch = float64(hzOffset) / float64(c.hzNeu-c.hzMin)
+		out[0] = int16(int((int16(rawStick[0]) - int16(c.xCenter))) * desiredRange / int(c.xMaxOff))
 	}
-	if vtOffset > 0 {
-		vtStretch = float64(vtOffset) / float64(c.vtMax-c.vtNeu)
+	if rawStick[1] < c.yCenter {
+		out[1] = int16(int((int16(rawStick[1]) - int16(c.yCenter))) * desiredRange / int(c.yMinOff))
 	} else {
-		vtStretch = float64(vtOffset) / float64(c.vtNeu-c.vtMin)
+		out[1] = int16(int((int16(rawStick[1]) - int16(c.yCenter))) * desiredRange / int(c.yMaxOff))
 	}
 
-	magnitude := hzStretch*hzStretch + vtStretch*vtStretch
-	if magnitude > magnitudeMax {
-		angle := math.Atan2(vtStretch, hzStretch)
-		hzStretch = math.Cos(angle) * magnitudeMax
-		vtStretch = math.Sin(angle) * magnitudeMax
+	// 6. clamp
+	if out[0] > desiredRange || out[0] < -desiredRange || out[1] > desiredRange || out[1] < -desiredRange {
+		var modX, modY float64 = float64(out[0]), float64(out[1])
+		if modX > desiredRange || modX < -desiredRange {
+			// overFactor is slightly over 1 or slightly under -1
+			overFactor := modX / desiredRange
+			overFactor = math.Copysign(overFactor, 1.0)
+			modX /= overFactor
+			modY /= overFactor
+		}
+		if modY > desiredRange || modY < -desiredRange {
+			// overFactor is slightly over 1 or slightly under -1
+			overFactor := modY / desiredRange
+			overFactor = math.Copysign(overFactor, 1.0)
+			modX /= overFactor
+			modY /= overFactor
+		}
+		// clamp again in case of fraction weirdness
+		if modX > desiredRange {
+			modX = desiredRange
+		}
+		if modX < -desiredRange {
+			modX = -desiredRange
+		}
+		if modY > desiredRange {
+			modY = desiredRange
+		}
+		if modY < -desiredRange {
+			modY = -desiredRange
+		}
+		out[0], out[1] = int16(modX), int16(modY)
 	}
 
-	if hzStretch > 1 {
-		hzStretch = 1
-	}
-	if hzStretch < -1 {
-		hzStretch = -1
-	}
-	if vtStretch > 1 {
-		vtStretch = 1
-	}
-	if vtStretch < -1 {
-		vtStretch = -1
-	}
-
-	ret := [2]int8{int8(hzStretch * 127), int8(vtStretch * 127)}
-	return ret
+	return out
 }

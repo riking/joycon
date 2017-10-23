@@ -126,10 +126,10 @@ func (o *uinput) setupNewKernel(m ControllerMapping, name string) error {
 		}
 	}
 	abs_setup.absinfo.value = 0
-	abs_setup.absinfo.min = -128
-	abs_setup.absinfo.max = 128
-	abs_setup.absinfo.fuzz = 2
-	abs_setup.absinfo.flat = 2
+	abs_setup.absinfo.min = -0x7FF
+	abs_setup.absinfo.max = 0x7FF
+	abs_setup.absinfo.fuzz = 4
+	abs_setup.absinfo.flat = 4
 	o.axes = m.Axes
 	for _, e := range o.axes {
 		if e.Name == "" {
@@ -172,10 +172,10 @@ func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
 		if code > maxAxis {
 			maxAxis = code
 		}
-		setup.absmin[code] = -128
-		setup.absmax[code] = 128
-		setup.absflat[code] = 2
-		setup.absfuzz[code] = 2
+		setup.absmin[code] = -0x7FF
+		setup.absmax[code] = 0x7FF
+		setup.absflat[code] = 4
+		setup.absfuzz[code] = 4
 	}
 
 	for code := uint16(0); code <= maxAxis; code++ {
@@ -303,6 +303,7 @@ func (o *uinput) setPermissions() error {
 			fmt.Println("set permissions for", m)
 		}
 	}
+
 	return nil
 }
 
@@ -327,7 +328,7 @@ func (o *uinput) ButtonUpdate(b jcpc.ButtonID, state bool) {
 	})
 }
 
-func (o *uinput) StickUpdate(axis jcpc.AxisID, value int8) {
+func (o *uinput) StickUpdate(axis jcpc.AxisID, value int16) {
 	var code uint16
 	var ok bool
 	var invert bool
