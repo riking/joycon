@@ -49,10 +49,17 @@ type calibrationData struct {
 	xMinOff, yMinOff uint16
 }
 
-func (c *calibrationData) Parse(b []byte) {
-	c.xMaxOff, c.yMaxOff = decodeUint12(b[0:3])
-	c.xCenter, c.yCenter = decodeUint12(b[3:6])
-	c.xMinOff, c.yMinOff = decodeUint12(b[6:9])
+// side must be TypeLeft or TypeRight; TypeBoth controllers should call this twice
+func (c *calibrationData) Parse(b []byte, side jcpc.JoyConType) {
+	if side == jcpc.TypeLeft {
+		c.xMaxOff, c.yMaxOff = decodeUint12(b[0:3])
+		c.xCenter, c.yCenter = decodeUint12(b[3:6])
+		c.xMinOff, c.yMinOff = decodeUint12(b[6:9])
+	} else {
+		c.xCenter, c.yCenter = decodeUint12(b[0:3])
+		c.xMinOff, c.yMinOff = decodeUint12(b[3:6])
+		c.xMaxOff, c.yMaxOff = decodeUint12(b[6:9])
+	}
 }
 
 const magnitudeMax = 1.0
@@ -74,7 +81,7 @@ func (_c *calibrationData) Adjust(rawStick [2]uint16) [2]int16 {
 	c := _c
 	if c == nil {
 		c = &fakeCalibrationData
-	} else if c.xCenter == 0 {
+	} else if c.xCenter == 4095 {
 		c = &fakeCalibrationData
 	}
 

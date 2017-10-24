@@ -73,8 +73,15 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 	// Read stick calibration and case colors
 	// TODO cache this data
 	go func() {
-		_, _ = jc.SPIRead(factoryStickCalibStart, factoryStickCalibLen)
-		_, _ = jc.SPIRead(userStickCalibStart, userStickCalibLen)
+		time.Sleep(100*time.Millisecond)
+		_, err := jc.SPIRead(factoryStickCalibStart, factoryStickCalibLen)
+		if err != nil {
+			fmt.Println("Error:", err)
+		}
+		_, err = jc.SPIRead(userStickCalibStart, userStickCalibLen)
+		if err != nil {
+			fmt.Println("Error:", err)
+		}
 	}()
 	return jc, nil
 }
@@ -596,8 +603,8 @@ func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
 
 	if addr == factoryStickCalibStart && length == factoryStickCalibLen {
 		jc.mu.Lock()
-		jc.calib[0].Parse(data[0:9])
-		jc.calib[1].Parse(data[9:18])
+		jc.calib[0].Parse(data[0:9], jcpc.TypeLeft)
+		jc.calib[1].Parse(data[9:18], jcpc.TypeRight)
 		// one padding byte
 		const colorOffset = 19
 		jc.caseColor.R = data[colorOffset+0]
@@ -613,25 +620,29 @@ func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
 		if true {
 			fmt.Printf("%s: Got factory calibration and button colors\n", jc.serial)
 		}
+		fmt.Printf("%s: SPI read returned [%x+%d]\n%s", jc.serial, addr, length, hex.Dump(data))
 	} else if addr == userStickCalibStart && length == userStickCalibLen {
+		fmt.Printf("%s: SPI read returned [%x+%d]\n%s", jc.serial, addr, length, hex.Dump(data))
 		had := false
 		jc.mu.Lock()
 		const magicHaveCalibration = 0xA1B2
 		if binary.LittleEndian.Uint16(data[0:2]) == magicHaveCalibration {
-			jc.calib[0].Parse(data[2:2+9])
+			jc.calib[0].Parse(data[2:2+9], jcpc.TypeLeft)
 			had = true
 		}
 		if binary.LittleEndian.Uint16(data[11:13]) == magicHaveCalibration {
-			jc.calib[1].Parse(data[13:13+9])
+			jc.calib[1].Parse(data[13:13+9], jcpc.TypeRight)
 			had = true
 		}
 		jc.mu.Unlock()
 
 		if had {
-			fmt.Printf("%s: Read user stick calibration\n", jc.serial)
+			fmt.Printf("%s: Read user stick calibration: %v\n", jc.serial, jc.calib)
 		} else {
-			fmt.Printf("%s: Checked user stick calibration\n", jc.serial)
+			fmt.Printf("%s: Checked user stick calibration: %v\n", jc.serial, jc.calib)
 		}
+	} else {
+		fmt.Printf("%s: SPI read returned [%x+%d]\n%s", jc.serial, addr, length, hex.Dump(data))
 	}
 
 	jc.mu.Lock()
