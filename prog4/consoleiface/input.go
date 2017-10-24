@@ -123,27 +123,26 @@ func selectJoyCon(m *Manager, argv []string) (jc jcpc.JoyCon, newArgv []string, 
 	}
 }
 
-const batteryBarGraph = ""
 const colorBad = "\033[1m\033[41m\033[37m"
 const colorMid = "\033[1m\033[33m"
 const colorGood = "\033[1m\033[32m"
 const colorReset = "\033[m"
+const textCharging = " ⚡ "
 
 var batteryStatus = []string{
-	"🔋 " + "❓" + " ",
+	"🔋 " + colorBad + "！" + colorReset,
 	"🔋 " + colorBad + "▁ " + colorReset,
-	"🔋 " + colorBad + "▂ " + colorReset,
-	"🔋 " + colorBad + "▃ " + colorReset,
-	"🔋 " + colorMid + "▄ " + colorReset,
+	"🔋 " + colorMid + "▃ " + colorReset,
 	"🔋 " + colorMid + "▅ " + colorReset,
-	"🔋 " + colorMid + "▆ " + colorReset,
-	"🔋 " + colorMid + "▇ " + colorReset,
 	"🔋 " + colorGood + "█ " + colorReset,
-	"🔋 " + "⚡ ",
 }
 
-func renderBattery(l int8) string {
-	return batteryStatus[l]
+func renderBattery(level int8, charging bool) string {
+	if charging {
+		return batteryStatus[level] + textCharging
+	} else {
+		return batteryStatus[level]
+	}
 }
 
 func printConnectedJoyCons(m *Manager) {

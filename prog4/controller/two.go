@@ -87,8 +87,8 @@ func (c *two) updateBoth() {
 	if c.stdTransitionDelay > 0 {
 		c.stdTransitionDelay--
 		if c.stdTransitionDelay == 0 {
-			c.left.ChangeInputMode(jcpc.ModeStandard)
-			c.right.ChangeInputMode(jcpc.ModeStandard)
+			c.left.ChangeInputMode(jcpc.InputStandard)
+			c.right.ChangeInputMode(jcpc.InputStandard)
 		}
 	}
 }

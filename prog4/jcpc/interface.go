@@ -22,8 +22,10 @@ type JoyCon interface {
 	Reconnect(info *hid.DeviceInfo)
 
 	Buttons() ButtonState
-	RawSticks(axis AxisID) [2]byte
-	Battery() int8
+	// Indexed by [left,right][x,y]
+	// Prefer use of ReadInto() for stick data
+	RawSticks() [2][2]uint16
+	Battery() (int8, bool)
 	ReadInto(out *CombinedState, includeGyro bool)
 
 	ChangeInputMode(mode InputMode) bool // returns false if impossible
@@ -60,7 +62,7 @@ type Controller interface {
 type Output interface {
 	BeginUpdate() error
 	ButtonUpdate(b ButtonID, value bool)
-	StickUpdate(axis AxisID, value int8)
+	StickUpdate(axis AxisID, value int16)
 	GyroUpdate(vals GyroFrame)
 	FlushUpdate() error
 
@@ -92,7 +94,8 @@ type CombinedState struct {
 	// 3 frames of 6 values
 	Gyro [3]GyroFrame
 	// [left, right][horizontal, vertical]
-	AdjSticks [2][2]int8
+	// range is -0x7FF to +0x7FF
+	AdjSticks [2][2]int16
 	Buttons   ButtonState
 	// battery is per joycon, can't be combined
 }
@@ -110,20 +113,19 @@ type JoyConNotify interface {
 type InputMode int
 
 const (
-	// the joycon pushes updates to button presses with the 0x3F command.
-	ModeLazyButtons InputMode = iota
-	// the host requests the current status with a 0x01 command.
-	ModeActivePolling
-	// the joycon pushes the current state at 60Hz. (0x3 0x30)
-	ModeStandard
-	// the joycon pushes large packets at 60Hz. (0x3 0x31)
-	ModeNFC
+	InputIRPolling InputMode = 0
+	InputIRPollingUnused = 1
+	InputIRPollingSpecial = 2
+	InputMCUUpdate = 0x23 // not fully known
+	InputStandard = 0x30
+	InputNFC = 0x31
+	InputUnknown33 = 0x33
+	InputUnknown35 = 0x35
+	InputLazyButtons InputMode = 0x3F
+
+	InputActivePolling = 0x13F // pseudo-mode, driver only
 )
 
-func (i InputMode) NeedsMode3() bool {
-	return i == ModeStandard || i == ModeNFC
-}
-
 func (i InputMode) NeedsEmptyRumbles() bool {
-	return i == ModeActivePolling
+	return i == InputActivePolling
 }

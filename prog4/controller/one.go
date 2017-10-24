@@ -59,7 +59,7 @@ func (c *one) update() {
 	if c.stdTransitionDelay > 0 {
 		c.stdTransitionDelay--
 		if c.stdTransitionDelay == 0 {
-			c.jc.ChangeInputMode(jcpc.ModeStandard)
+			c.jc.ChangeInputMode(jcpc.InputStandard)
 		}
 	}
 }

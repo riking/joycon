@@ -30,7 +30,7 @@ func (c *consoleOutput) ButtonUpdate(bu jcpc.ButtonID, state bool) {
 	fmt.Printf("[Controller %d] %s %s\n", c.i, bu.String(), pressed)
 }
 
-func (c *consoleOutput) StickUpdate(axis jcpc.AxisID, value int8) {
+func (c *consoleOutput) StickUpdate(axis jcpc.AxisID, value int16) {
 
 }
 
