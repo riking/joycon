@@ -73,7 +73,7 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 	// Read stick calibration and case colors
 	// TODO cache this data
 	go func() {
-		time.Sleep(100*time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		_, err := jc.SPIRead(factoryStickCalibStart, factoryStickCalibLen)
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -102,7 +102,7 @@ func (jc *joyconBluetooth) Buttons() jcpc.ButtonState {
 //
 // 4=full, 3, 2, 1=critical, 0=empty. true=charging.
 func (jc *joyconBluetooth) Battery() (int8, bool) {
-	return int8(jc.packet1 >> 5), jc.packet1 & 0x10 != 0
+	return int8(jc.packet1 >> 5), jc.packet1&0x10 != 0
 }
 
 func (jc *joyconBluetooth) CaseColor() color.RGBA {
@@ -148,7 +148,7 @@ func (jc *joyconBluetooth) ReadInto(out *jcpc.CombinedState, includeGyro bool) {
 	jc.mu.Lock()
 	defer jc.mu.Unlock()
 
-	out.Buttons = out.Buttons.Union(jc.buttons)
+	out.Buttons = out.Buttons.Remove(jc.side).Union(jc.buttons)
 	if jc.side.IsLeft() {
 		out.AdjSticks[0] = jc.calib[0].Adjust(jc.raw_stick[0])
 	}
@@ -587,9 +587,9 @@ func (jc *joyconBluetooth) reader() {
 
 const (
 	factoryStickCalibStart = 0x603D
-	factoryStickCalibLen = 25
-	userStickCalibStart = 0x8010
-	userStickCalibLen = 22
+	factoryStickCalibLen   = 25
+	userStickCalibStart    = 0x8010
+	userStickCalibLen      = 22
 )
 
 func (jc *joyconBluetooth) handleSPIRead(packet []byte) {

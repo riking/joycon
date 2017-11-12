@@ -65,6 +65,18 @@ var ButtonList = []ButtonID{
 	Button_L_ZL,
 }
 
+const allButtonsLeft2 = Button_L_Down | Button_L_Up |
+	Button_L_Right | Button_L_Left |
+	Button_L_SR | Button_L_SL |
+	Button_L_L | Button_L_ZL
+const allButtonsLeft1 = Button_Capture | Button_Minus | Button_L_Stick
+
+const allButtonsRight0 = Button_R_Y | Button_R_X |
+	Button_R_B | Button_R_A |
+	Button_R_SR | Button_R_SL |
+	Button_R_R | Button_R_ZR
+const allButtonsRight1 = Button_Home | Button_Plus | Button_R_Stick
+
 func (b ButtonID) GetIndex() int {
 	q := b & 0xFF
 	add := int((b & 0xF00) >> 5) // convert byte index to multiple of 8 - x >> 8 << 3
@@ -176,8 +188,27 @@ func (b ButtonState) DiffMask(other ButtonState) ButtonState {
 	return result
 }
 
+func (b ButtonState) Remove(side JoyConType) ButtonState {
+	var result ButtonState
+	switch side {
+	case TypeLeft:
+		result[0] = b[0]
+		result[1] = b[1] &^ byte(allButtonsLeft1&0xFF)
+		result[2] = b[2] &^ byte(allButtonsLeft2&0xFF)
+	case TypeRight:
+		result[0] = b[0] &^ byte(allButtonsRight0&0xFF)
+		result[1] = b[1] &^ byte(allButtonsRight1&0xFF)
+		result[2] = b[2]
+	case TypeBoth:
+		result[0] = b[0] &^ byte(allButtonsRight0&0xFF)
+		result[1] = b[1] &^ byte((allButtonsRight1&0xFF)|(allButtonsLeft1&0xFF))
+		result[2] = b[2] &^ byte(allButtonsLeft2&0xFF)
+	}
+	return result
+}
+
 func (b ButtonState) HasAll(mask ButtonState) bool {
-	var result bool = true
+	var result = true
 	result = result && (b[0]&mask[0]) == mask[0]
 	result = result && (b[1]&mask[1]) == mask[1]
 	result = result && (b[2]&mask[2]) == mask[2]
@@ -185,7 +216,7 @@ func (b ButtonState) HasAll(mask ButtonState) bool {
 }
 
 func (b ButtonState) HasAny(mask ButtonState) bool {
-	var result bool = false
+	var result = false
 	result = result || (b[0]&mask[0]) != 0
 	result = result || (b[1]&mask[1]) != 0
 	result = result || (b[2]&mask[2]) != 0
