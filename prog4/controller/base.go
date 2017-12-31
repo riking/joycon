@@ -14,10 +14,6 @@ type base struct {
 	prevState jcpc.CombinedState
 }
 
-func Pro(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
-	panic("NotImplemented")
-}
-
 func (c *base) BindToOutput(o jcpc.Output) {
 	c.output = o
 }

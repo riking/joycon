@@ -128,6 +128,8 @@ var (
 	buttonsSLSR_L = jcpc.ButtonState{0, 0, byte((jcpc.Button_L_SL | jcpc.Button_L_SR) & 0xFF)}
 	buttonsRZR    = jcpc.ButtonState{byte((jcpc.Button_R_R | jcpc.Button_R_ZR) & 0xFF), 0, 0}
 	buttonsLZL    = jcpc.ButtonState{0, 0, byte((jcpc.Button_L_L | jcpc.Button_L_ZL) & 0xFF)}
+	buttonsLR     = jcpc.ButtonState{byte(jcpc.Button_R_R & 0xFF), 0, byte(jcpc.Button_L_L & 0xFF)}
+	buttonsZLZR   = jcpc.ButtonState{byte(jcpc.Button_R_ZR & 0xFF), 0, byte(jcpc.Button_L_ZL & 0xFF)}
 
 	buttonsAnyLR = jcpc.ButtonState{}.Union(buttonsRZR).Union(buttonsLZL).Union(buttonsSLSR_L).Union(buttonsSLSR_R)
 )
@@ -248,6 +250,9 @@ func (m *Manager) attemptPairing() {
 
 	for idx, up := range m.unpaired {
 		if up.curButtons.HasAll(buttonsSLSR_L) || up.curButtons.HasAll(buttonsSLSR_R) {
+			m.doPairing_(idx, -1)
+			didPair = append(didPair, idx)
+		} else if up.curButtons.HasAll(buttonsLR) || up.curButtons.HasAll(buttonsZLZR) {
 			m.doPairing_(idx, -1)
 			didPair = append(didPair, idx)
 		} else if up.curButtons.HasAny(buttonsLZL) {
