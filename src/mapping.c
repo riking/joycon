@@ -85,7 +85,7 @@ static cmap_entry default_two_joycons[] = {
     {.type = CONTROLLER_MAP_BUTTON,
      .button =
          {
-             .joycon_button = JC_BUTTON_L_CAP, .uinput_button = KEY_SCREEN,
+             .joycon_button = JC_BUTTON_L_CAP, .uinput_button = KEY_SYSRQ,
          }},
     /* sticks */
     {.type = CONTROLLER_MAP_BUTTON,

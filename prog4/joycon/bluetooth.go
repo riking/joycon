@@ -1,25 +1,17 @@
 package joycon
 
 import (
+	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"image/color"
 	"sync"
-
 	"time"
 
 	"github.com/GeertJohan/go.hid"
+	"github.com/pkg/errors"
 	"github.com/riking/joycon/prog4/jcpc"
-	"context"
-)
-
-const (
-	// the joycon pushes updates to button presses with the 0x3F command.
-	modeButtonPush = iota
-	// the host requests the current status with a 0x01 command.
-	modeInputPolling
-	// the joycon pushes the current state at 60Hz.
-	modeInputPushing
 )
 
 type joyconBluetooth struct {
@@ -35,15 +27,17 @@ type joyconBluetooth struct {
 	// isShutdown is set to true on Close() and Shutdown().
 	// Shutdown also requests that the JoyCon disconnect from the host.
 	isShutdown bool
-	mode       int
+	mode       jcpc.InputMode
 	controller jcpc.Controller
 	ui         jcpc.Interface
 
-	battery   int8
-	raw_stick [2][2]byte
+	packet1   uint8
 	buttons   jcpc.ButtonState
+	raw_stick [2][2]uint16       // left, right; x, y
+	calib     [2]calibrationData // left, right
 	haveGyro  bool
 	gyro      [3]jcpc.GyroFrame
+	// TODO gyro calibration
 
 	haveColors  bool
 	caseColor   color.RGBA
@@ -71,10 +65,24 @@ func NewBluetooth(hidHandle *hid.Device, side jcpc.JoyConType, ui jcpc.Interface
 	jc.side = side
 	jc.controller = nil
 	jc.haveColors = false
-	jc.mode = modeButtonPush
+	jc.mode = jcpc.InputLazyButtons
 	jc.isAlive = true
 
 	go jc.reader()
+
+	// Read stick calibration and case colors
+	// TODO cache this data
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_, err := jc.SPIRead(factoryStickCalibStart, factoryStickCalibLen)
+		if err != nil {
+			fmt.Println("Error:", err)
+		}
+		_, err = jc.SPIRead(userStickCalibStart, userStickCalibLen)
+		if err != nil {
+			fmt.Println("Error:", err)
+		}
+	}()
 	return jc, nil
 }
 
@@ -90,8 +98,11 @@ func (jc *joyconBluetooth) Buttons() jcpc.ButtonState {
 	return jc.buttons
 }
 
-func (jc *joyconBluetooth) Battery() int8 {
-	return jc.battery
+// Battery level and charging state.
+//
+// 4=full, 3, 2, 1=critical, 0=empty. true=charging.
+func (jc *joyconBluetooth) Battery() (int8, bool) {
+	return int8(jc.packet1 >> 5), jc.packet1&0x10 != 0
 }
 
 func (jc *joyconBluetooth) CaseColor() color.RGBA {
@@ -99,10 +110,10 @@ func (jc *joyconBluetooth) CaseColor() color.RGBA {
 }
 
 func (jc *joyconBluetooth) ButtonColor() color.RGBA {
-	return jc.caseColor
+	return jc.buttonColor
 }
 
-func (jc *joyconBluetooth) EnableIMU(status bool) {
+func (jc *joyconBluetooth) EnableGyro(status bool) {
 	subcommand := []byte{0x40, 0}
 	if status {
 		subcommand[1] = 1
@@ -114,29 +125,39 @@ func (jc *joyconBluetooth) EnableIMU(status bool) {
 	jc.mu.Unlock()
 }
 
-func (jc *joyconBluetooth) RawSticks(axis jcpc.AxisID) [2]byte {
-	if axis == jcpc.Axis_L_Horiz || axis == jcpc.Axis_L_Vertical {
-		return jc.raw_stick[0]
-	} else {
-		return jc.raw_stick[1]
+func (jc *joyconBluetooth) RawSticks() [2][2]uint16 {
+	return jc.raw_stick
+}
+
+func (jc *joyconBluetooth) ChangeInputMode(newMode jcpc.InputMode) bool {
+	jc.mu.Lock()
+	defer jc.mu.Unlock()
+
+	if newMode == jc.mode {
+		return false
 	}
+
+	cmd := []byte{0x03, byte(newMode)}
+	jc.subcommandQueue = append(jc.subcommandQueue, cmd)
+	jc.mode = newMode
+
+	return true
 }
 
 func (jc *joyconBluetooth) ReadInto(out *jcpc.CombinedState, includeGyro bool) {
 	jc.mu.Lock()
 	defer jc.mu.Unlock()
 
-	out.Buttons = out.Buttons.Union(jc.buttons)
-	// TODO send CALIBRATED stick data
+	out.Buttons = out.Buttons.Remove(jc.side).Union(jc.buttons)
 	if jc.side.IsLeft() {
-		out.RawSticks[0] = jc.raw_stick[0]
+		out.AdjSticks[0] = jc.calib[0].Adjust(jc.raw_stick[0])
 	}
 	if jc.side.IsRight() {
-		out.RawSticks[1] = jc.raw_stick[1]
+		out.AdjSticks[1] = jc.calib[1].Adjust(jc.raw_stick[1])
 	}
 
 	if includeGyro && jc.haveGyro {
-		out.Gyro = jc.gyro
+		out.Gyro = jc.gyro // TODO 6axis calibration
 	}
 }
 
@@ -151,14 +172,15 @@ func (jc *joyconBluetooth) Rumble(d []jcpc.RumbleData) {
 	jc.rumbleQueue = append(jc.rumbleQueue, d...)
 }
 
+// Perform a SPI read and block for the result.
 func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
-	cmd := []byte{0, 0, 0, 0, len}
+	cmd := []byte{0x10, 0, 0, 0, 0, len}
 	ch := make(chan []byte)
 	chE := make(chan error)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	binary.LittleEndian.PutUint32(cmd[0:], addr)
+	binary.LittleEndian.PutUint32(cmd[1:], addr)
 
 	jc.mu.Lock()
 	jc.subcommandQueue = append(jc.subcommandQueue, cmd)
@@ -170,9 +192,9 @@ func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
 				chE <- e
 			}
 		},
-		Ctx: ctx,
+		Ctx:     ctx,
 		address: addr,
-		size: len,
+		size:    len,
 	})
 	jc.mu.Unlock()
 
@@ -186,10 +208,29 @@ func (jc *joyconBluetooth) SPIRead(addr uint32, len byte) ([]byte, error) {
 	}
 }
 
+func (jc *joyconBluetooth) SPIWrite(addr uint32, p []byte) error {
+	if len(p) > jcpc.SPIMaxData {
+		return errors.Errorf("len over maximum")
+	}
+	cmd := make([]byte, 6+len(p))
+	cmd[0] = 0x11
+	binary.LittleEndian.PutUint32(cmd[1:], addr)
+	cmd[5] = byte(len(p))
+	copy(cmd[6:], p)
+	jc.queueSubcommand(cmd)
+	return nil
+}
+
 func (jc *joyconBluetooth) BindToController(c jcpc.Controller) {
 	jc.mu.Lock()
 	jc.controller = c
 	jc.mu.Unlock()
+
+	if c == nil {
+		jc.hidHandle.AttemptGrab(false)
+	} else {
+		jc.hidHandle.AttemptGrab(false)
+	}
 }
 
 func (jc *joyconBluetooth) BindToInterface(c jcpc.Interface) {
@@ -275,26 +316,19 @@ func (jc *joyconBluetooth) queueSubcommand(data []byte) {
 
 // OnFrame triggers writes - this way they're rate-limited
 func (jc *joyconBluetooth) OnFrame() {
-	sendingCommand := true
+	connBroken := false
 	jc.mu.Lock()
 	if !jc.isAlive || jc.isShutdown {
-		sendingCommand = false
+		connBroken = true
 	}
 
 	jc.mu.Unlock()
 
-	if !sendingCommand {
+	if connBroken {
 		return
 	}
 
-	switch jc.mode {
-	case modeButtonPush:
-		jc.sendRumble(false)
-	case modeInputPolling:
-		jc.sendRumble(true)
-	case modeInputPushing:
-		jc.sendRumble(false)
-	}
+	jc.sendRumble(jc.mode.NeedsEmptyRumbles())
 }
 
 // mu must be held
@@ -374,7 +408,7 @@ func (jc *joyconBluetooth) onReadError(err error) {
 	jc.hidHandle = nil
 	jc.mu.Unlock()
 
-	fmt.Printf("[ ERR] JoyCon %p read error: %v\n", jc, err)
+	fmt.Printf("[ ERR] JoyCon %s read error: %v\n", jc.serial, err)
 
 	go notify(jc, jcpc.NotifyConnection, jc.ui, jc.controller)
 }
@@ -385,24 +419,20 @@ func (jc *joyconBluetooth) fillInput(packet []byte) {
 	packet = packet[1:]
 
 	// timer := packet[0]
-	newBattery := int8((packet[1] & 0xF0) >> 4)
-	batteryChanged := jc.battery != newBattery
-	jc.battery = newBattery
-	if batteryChanged {
+	prevBattery := jc.packet1 & 0xF0
+	jc.packet1 = packet[1]
+	if prevBattery != (packet[1] & 0xF0) {
 		go jc.ui.JoyConUpdate(jc, jcpc.NotifyBattery)
 	}
 
 	jc.buttons = jcpc.ButtonsFromSlice(packet[2:5])
 
 	if jc.side.IsLeft() {
-		jc.raw_stick[0][0] = ((packet[6] & 0x0F) << 4) | ((packet[5] & 0xF0) >> 4)
-		jc.raw_stick[0][1] = packet[7]
+		jc.raw_stick[0][0], jc.raw_stick[0][1] = decodeUint12(packet[5:8])
 	}
 	if jc.side.IsRight() {
-		jc.raw_stick[1][0] = ((packet[9] & 0x0F) << 4) | ((packet[8] & 0xF0) >> 4)
-		jc.raw_stick[1][1] = packet[10]
+		jc.raw_stick[1][0], jc.raw_stick[1][1] = decodeUint12(packet[8:11])
 	}
-	// ?? packet[11]
 
 	jc.mu.Unlock()
 }
@@ -437,7 +467,7 @@ func (jc *joyconBluetooth) fillGyroData(packet []byte) {
 		}
 	}
 
-	fmt.Printf("Gyro data:\n")
+	fmt.Print("Gyro data:\n")
 	gyroPrint(gyroDiff(prevFrame, jc.gyro[0]))
 	gyroPrint(jc.gyro[0])
 	gyroPrint(gyroDiff(jc.gyro[0], jc.gyro[1]))
@@ -447,36 +477,61 @@ func (jc *joyconBluetooth) fillGyroData(packet []byte) {
 }
 
 func (jc *joyconBluetooth) handleSubcommandReply(_packet []byte) {
-	// packetID := _packet[0]
+	packetID := _packet[0]
 	packet := _packet[1:]
 
-	replyPacketID := packet[12] - 0x80
+	replyPacketID := byte(0)
+	if packetID == 0x21 {
+		replyPacketID = packet[12] - 0x80
+	} else /* 0x31-0x33 */ {
+		replyPacketID = packet[12]
+	}
+
 	if replyPacketID == 0 {
 		return
 	}
 
-	fmt.Println("got subcommand reply packet:", replyPacketID, packet[12:])
+	unknown := false
 	switch replyPacketID {
+	case 0x01: // Manual Pairing
+		unknown = true
+	case 0x02: // Device Info
+		fmt.Printf("%s: Firmware %d.%d, type %d, MAC %02X:%02X:%02X:%02X:%02X:%02X, colors_on %d\n",
+			jc.serial, int(packet[0]), int(packet[1]),
+			packet[2], /* packet[3], */
+			packet[4], packet[5], packet[6], packet[7], packet[8], packet[9],
+			/* packet[10], */
+			packet[11],
+		)
+	case 0x03: // Set Input Report Mode
+		unknown = true
+	case 0x04: // Shoulder buttons time elapsed
+		unknown = true
 	case 0x10: // SPI Flash Read
 		jc.handleSPIRead(packet[12:])
-	case 0x03:
-		fallthrough
-	case 0x40:
-		fallthrough
-	case 0x50:
-		fallthrough
+	case 0x43: // IMU Register Read
+		unknown = true
+	case 0x50: // Get Voltage
+		unknown = true
+	case 0x52: // Get unknown data
+		unknown = true
 	default:
-		fmt.Println("got subcommand reply packet:", replyPacketID, packet[12:])
+		unknown = true
+	}
+
+	if unknown {
+		fmt.Printf("got subcommand reply packet: %d\n%s", replyPacketID, hex.Dump(packet[12:]))
 	}
 }
 
 func (jc *joyconBluetooth) handleButtonPush(packet []byte) {
-	if jc.mode != modeButtonPush {
+	if jc.mode != jcpc.InputLazyButtons {
 		return
 	}
 
 	// translating the buttons is too much of a pain
 	// and requires different handling from pro controller
+	// so just queue an empty subcommand
 	jc.queueSubcommand([]byte{0})
 }
 
@@ -508,7 +563,6 @@ func (jc *joyconBluetooth) reader() {
 			continue
 		}
 
-		fmt.Println("read packet", packet)
 		switch packet[0] {
 		case 0x21:
 			jc.fillInput(packet)
@@ -526,30 +580,70 @@ func (jc *joyconBluetooth) reader() {
 			jc.handleButtonPush(packet)
 		default:
 			fmt.Println("[!!] Unknown INPUT packet type ", packet[0])
-			fmt.Printf("Packet %02X: %v\n", packet[0], packet)
+			fmt.Printf("Packet %02X:\n%s", packet[0], hex.Dump(packet[1:]))
 		}
 	}
 }
 
-func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
-	addr := binary.LittleEndian.Uint32(packet[1:])
-	length := packet[5]
-	data := packet[6:]
+const (
+	factoryStickCalibStart = 0x603D
+	factoryStickCalibLen   = 25
+	userStickCalibStart    = 0x8010
+	userStickCalibLen      = 22
+)
 
-	if addr == 0x6050 && length == 6 {
+func (jc *joyconBluetooth) handleSPIRead(packet []byte) {
+	addr := binary.LittleEndian.Uint32(packet[2:])
+	length := packet[6]
+	data := packet[7:]
+
+	if int(length)+7 <= len(packet) {
+		data = packet[7 : 7+length]
+	}
+
+	if addr == factoryStickCalibStart && length == factoryStickCalibLen {
 		jc.mu.Lock()
-		jc.haveColors = true
-		jc.caseColor.R = data[0]
-		jc.caseColor.G = data[1]
-		jc.caseColor.B = data[2]
+		jc.calib[0].Parse(data[0:9], jcpc.TypeLeft)
+		jc.calib[1].Parse(data[9:18], jcpc.TypeRight)
+		// one padding byte
+		const colorOffset = 19
+		jc.caseColor.R = data[colorOffset+0]
+		jc.caseColor.G = data[colorOffset+1]
+		jc.caseColor.B = data[colorOffset+2]
 		jc.caseColor.A = 255
-		jc.buttonColor.R = data[3]
-		jc.buttonColor.G = data[4]
-		jc.buttonColor.B = data[5]
+		jc.buttonColor.R = data[colorOffset+3]
+		jc.buttonColor.G = data[colorOffset+4]
+		jc.buttonColor.B = data[colorOffset+5]
 		jc.buttonColor.A = 255
 		jc.mu.Unlock()
+
+		if true {
+			fmt.Printf("%s: Got factory calibration and button colors\n", jc.serial)
+		}
+		fmt.Printf("%s: SPI read returned [%x+%d]\n%s", jc.serial, addr, length, hex.Dump(data))
+	} else if addr == userStickCalibStart && length == userStickCalibLen {
+		fmt.Printf("%s: SPI read returned [%x+%d]\n%s", jc.serial, addr, length, hex.Dump(data))
+		had := false
+		jc.mu.Lock()
+		const magicHaveCalibration = 0xA1B2
+		if binary.LittleEndian.Uint16(data[0:2]) == magicHaveCalibration {
+			jc.calib[0].Parse(data[2:2+9], jcpc.TypeLeft)
+			had = true
+		}
+		if binary.LittleEndian.Uint16(data[11:13]) == magicHaveCalibration {
+			jc.calib[1].Parse(data[13:13+9], jcpc.TypeRight)
+			had = true
+		}
+		jc.mu.Unlock()
+
+		if had {
+			fmt.Printf("%s: Read user stick calibration: %v\n", jc.serial, jc.calib)
+		} else {
+			fmt.Printf("%s: Checked user stick calibration: %v\n", jc.serial, jc.calib)
+		}
+	} else {
+		fmt.Printf("%s: SPI read returned [%x+%d]\n%s", jc.serial, addr, length, hex.Dump(data))
 	}
-	// TODO stick calibration
 
 	jc.mu.Lock()
 	k := 0

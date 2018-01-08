@@ -32,6 +32,12 @@ int get_ioctl_get_feature(int length) {
 	return HIDIOCGFEATURE(length);
 }
 
+int hidraw_get_bdaddr(int fd, char *buf, size_t maxlen) {
+	return ioctl(fd,
+		HIDIOCGRAWNAME(maxlen),
+		buf);
+}
+
 */
 import "C"
 
@@ -39,6 +45,7 @@ type Device struct {
 	epoll  int
 	fd     int
 	closed bool
+	grab   bool
 
 	serial      string
 	productName string
@@ -254,7 +261,7 @@ func (dev *Device) Read(p []byte) (n int, err error) {
 			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
 				Events: unix.EPOLLIN,
 				Fd:     int32(dev.fd),
-			}}, 16)
+			}}, 1)
 			if pErr != nil {
 				fmt.Println("poll error:", pErr)
 			}
@@ -330,10 +337,31 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 	return nil
 }
 
+func (dev *Device) AttemptGrab(grab bool) error {
+	// this won't work because the fd is a hidraw fd, not a input fd
+	var param uintptr = 0
+	if grab {
+		param = 1
+	}
+	return nil
+	status, _, err := unix.Syscall(syscall.SYS_IOCTL,
+		uintptr(dev.fd),
+		uintptr(C.EVIOCGRAB),
+		uintptr(unsafe.Pointer(&param)))
+	if status != 0 {
+		fmt.Println("grab error", err)
+	}
+	dev.grab = grab
+	return nil
+}
+
 func (dev *Device) Close() error {
 	if dev == nil || dev.closed {
 		return os.ErrClosed
 	}
+
+	fmt.Println("closing uinput", dev.fd, dev.epoll, dev.grab)
+	dev.AttemptGrab(false)
 
 	unix.Close(dev.fd)
 	unix.Close(dev.epoll)

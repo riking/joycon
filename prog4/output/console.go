@@ -14,19 +14,12 @@ type consoleFactory struct {
 	i int
 }
 
-func NewConsoleFactory() jcpc.OutputFactory {
-	return &consoleFactory{}
+func NewConsole(t jcpc.JoyConType, playerNum int) (jcpc.Output, error) {
+	return &consoleOutput{i: playerNum}, nil
 }
 
-func (f *consoleFactory) New(bool) (jcpc.Output, error) {
-	f.i++
-	return &consoleOutput{i: f.i}, nil
-}
-
-func (c *consoleOutput) OnFrame() {
-}
-
-func (c *consoleOutput) BeginUpdate() {
+func (c *consoleOutput) BeginUpdate() error {
+	return nil
 }
 
 func (c *consoleOutput) ButtonUpdate(bu jcpc.ButtonID, state bool) {
@@ -37,17 +30,17 @@ func (c *consoleOutput) ButtonUpdate(bu jcpc.ButtonID, state bool) {
 	fmt.Printf("[Controller %d] %s %s\n", c.i, bu.String(), pressed)
 }
 
-func (c *consoleOutput) StickUpdate(axis int, value int8) {
+func (c *consoleOutput) StickUpdate(axis jcpc.AxisID, value int16) {
 
 }
 
-func (c *consoleOutput) GyroUpdate(d [3]jcpc.GyroFrame) {
+func (c *consoleOutput) GyroUpdate(d jcpc.GyroFrame) {}
 
-}
-
-func (c *consoleOutput) Flush() error {
+func (c *consoleOutput) FlushUpdate() error {
 	return nil
 }
+
+func (c *consoleOutput) OnFrame() {}
 
 func (c *consoleOutput) Close() error {
 	return nil

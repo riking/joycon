@@ -14,9 +14,10 @@ type two struct {
 	left  jcpc.JoyCon
 	right jcpc.JoyCon
 
-	lastUpdate time.Time
-	leftReady  bool
-	rightReady bool
+	lastLeft  time.Time
+	lastRight time.Time
+
+	stdTransitionDelay int8
 }
 
 func TwoJoyCons(left, right jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
@@ -26,6 +27,7 @@ func TwoJoyCons(left, right jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
 		base: base{
 			ui: ui,
 		},
+		stdTransitionDelay: 3,
 	}
 }
 
@@ -37,43 +39,36 @@ func (c *two) Rumble(data []jcpc.RumbleData) {
 func (c *two) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	isLeft := jc == c.left
 
-	if flags & jcpc.NotifyInput != 0 {
+	if flags&jcpc.NotifyInput != 0 {
 		c.mu.Lock()
+		c.prevState = c.curState
+		c.curState = c.prevState
 		if isLeft {
-			c.leftReady = true
+			c.left.ReadInto(&c.curState, false)
+			c.lastLeft = time.Now()
 		} else {
-			c.rightReady = true
+			c.right.ReadInto(&c.curState, true)
+			c.lastRight = time.Now()
 		}
-		bothReady := c.leftReady && c.rightReady
-		if !bothReady {
-			if time.Since(c.lastUpdate) > 10*time.Millisecond {
-				bothReady = true
-			}
-		}
-		c.mu.Unlock()
 
-		if bothReady {
-			c.updateBoth()
-		} else {
-			// wait for other controller to update
-		}
+		c.dispatchUpdates()
+		c.handleTransition()
+		c.mu.Unlock()
 	}
 
-	if flags & jcpc.NotifyConnection != 0 {
+	if flags&jcpc.NotifyConnection != 0 {
 		if jc.IsStopping() {
 			c.ui.RemoveController(c)
 		}
 	}
 }
 
-func (c *two) updateBoth() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.prevState = c.curState
-	c.curState = jcpc.CombinedState{}
-	c.left.ReadInto(&c.curState, false)
-	c.right.ReadInto(&c.curState, true)
-
-	c.dispatchUpdates()
+func (c *two) handleTransition() {
+	if c.stdTransitionDelay > 0 {
+		c.stdTransitionDelay--
+		if c.stdTransitionDelay == 0 {
+			go c.left.ChangeInputMode(jcpc.InputStandard)
+			go c.right.ChangeInputMode(jcpc.InputStandard)
+		}
+	}
 }

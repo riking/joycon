@@ -1,6 +1,7 @@
 package consoleiface
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
@@ -23,7 +24,7 @@ func filterCtrlZ(r rune) (rune, bool) {
 
 func (m *Manager) readStdin() {
 	l, err := readline.NewEx(&readline.Config{
-		Prompt:          "\033[1m[console]\033[m> ",
+		Prompt:          "\033[1m[console]\033[0m> ",
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
 
@@ -122,27 +123,26 @@ func selectJoyCon(m *Manager, argv []string) (jc jcpc.JoyCon, newArgv []string, 
 	}
 }
 
-const batteryBarGraph = ""
 const colorBad = "\033[1m\033[41m\033[37m"
 const colorMid = "\033[1m\033[33m"
 const colorGood = "\033[1m\033[32m"
 const colorReset = "\033[m"
+const textCharging = " ⚡ "
 
 var batteryStatus = []string{
-	"🔋 " + "❓" + " ",
+	"🔋 " + colorBad + "！" + colorReset,
 	"🔋 " + colorBad + "▁ " + colorReset,
-	"🔋 " + colorBad + "▂ " + colorReset,
-	"🔋 " + colorBad + "▃ " + colorReset,
-	"🔋 " + colorMid + "▄ " + colorReset,
+	"🔋 " + colorMid + "▃ " + colorReset,
 	"🔋 " + colorMid + "▅ " + colorReset,
-	"🔋 " + colorMid + "▆ " + colorReset,
-	"🔋 " + colorMid + "▇ " + colorReset,
 	"🔋 " + colorGood + "█ " + colorReset,
-	"🔋 " + "⚡ ",
 }
 
-func renderBattery(l int8) string {
-	return batteryStatus[l]
+func renderBattery(level int8, charging bool) string {
+	if charging {
+		return batteryStatus[level] + textCharging
+	} else {
+		return batteryStatus[level]
+	}
 }
 
 func printConnectedJoyCons(m *Manager) {
@@ -200,6 +200,8 @@ var _ = addCommand(cmdDisconnectAll, "Disconnect all JoyCons.", "disconnectall")
 var _ = addCommand(cmdSetPlayerLights, "Set the player lights on the JoyCon", "setPlayerLights")
 var _ = addCommand(cmdSetHomeLights, "Set the home light pattern.", "setHomeLights")
 var _ = addCommand(cmdEnableIMU, "Enable/disable IMU.", "imu")
+var _ = addCommand(cmdSPIDump, "Read from SPI flash.", "read")
+var _ = addCommand(cmdSPIWrite, "Write to SPI flash.", "write")
 var _ = addCommand(cmdCustomSend, "Send a subcommand packet.", "send")
 
 func cmdList(m *Manager, argv []string) {
@@ -287,7 +289,7 @@ func cmdEnableIMU(m *Manager, argv []string) {
 		enable = true
 	}
 
-	jc.EnableIMU(enable)
+	jc.EnableGyro(enable)
 }
 
 func cmdCustomSend(m *Manager, argv []string) {
@@ -333,4 +335,75 @@ func cmdDisconnectAll(m *Manager, argv []string) {
 	m.paired = nil
 	m.unpaired = nil
 	fmt.Println("Disconnected all.")
+}
+
+func cmdSPIDump(m *Manager, argv []string) {
+	jc, argv, err := selectJoyCon(m, argv)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if len(argv) < 2 {
+		fmt.Println("please specify the range: read [jc] [start=0x6000] [size=0x0100] [outfile=stdout]")
+		return
+	}
+
+	start, err := strconv.ParseInt(argv[0], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[0], err)
+		return
+	}
+	size, err := strconv.ParseInt(argv[1], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[1], err)
+		return
+	}
+
+	b, err := jcpc.SPIFlashRead(jc, uint32(start), uint32(size))
+	if err != nil {
+		fmt.Printf("SPI read %06x %d error: %v\n", start, size, err)
+	} else {
+		fmt.Printf("SPI read %06x %d data:\n%s\n", start, size, hex.Dump(b))
+	}
+}
+
+func cmdSPIWrite(m *Manager, argv []string) {
+	jc, argv, err := selectJoyCon(m, argv)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if len(argv) < 3 {
+		fmt.Println("please specify the range: read [jc] [start=0x6000] [size=0x0100] [outfile=stdout]")
+		return
+	}
+
+	start, err := strconv.ParseInt(argv[0], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[0], err)
+		return
+	}
+	size, err := strconv.ParseInt(argv[1], 0, 32)
+	if err != nil {
+		fmt.Printf("numeric parse error '%s': %v\n", argv[1], err)
+		return
+	}
+
+	if len(argv) != int(2+size) {
+		fmt.Println("wrong number of data bytes")
+		return
+	}
+
+	pattern := make([]byte, size)
+	for i := range pattern {
+		val, err := strconv.ParseUint(argv[2+i], 0, 8)
+		if err != nil {
+			fmt.Println("invalid number", argv[2+i], err)
+		}
+		pattern[i] = byte(val)
+	}
+
+	fmt.Println(jc.SPIWrite(uint32(start), pattern))
 }

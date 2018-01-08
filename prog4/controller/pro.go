@@ -7,7 +7,7 @@ import (
 	"github.com/riking/joycon/prog4/jcpc"
 )
 
-type one struct {
+type pro struct {
 	base
 
 	mu sync.Mutex
@@ -20,8 +20,8 @@ type one struct {
 	stdTransitionDelay int8
 }
 
-func OneJoyCon(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
-	return &one{
+func Pro(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
+	return &pro{
 		jc: jc,
 		base: base{
 			ui: ui,
@@ -30,11 +30,11 @@ func OneJoyCon(jc jcpc.JoyCon, ui jcpc.Interface) jcpc.Controller {
 	}
 }
 
-func (c *one) Rumble(data []jcpc.RumbleData) {
+func (c *pro) Rumble(data []jcpc.RumbleData) {
 	c.jc.Rumble(data)
 }
 
-func (c *one) JoyConUpdate(jc jcpc.JoyCon, flags int) {
+func (c *pro) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	if flags&jcpc.NotifyInput != 0 {
 		c.update()
 	}
@@ -46,7 +46,7 @@ func (c *one) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 	}
 }
 
-func (c *one) update() {
+func (c *pro) update() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

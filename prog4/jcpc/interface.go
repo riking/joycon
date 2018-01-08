@@ -22,12 +22,16 @@ type JoyCon interface {
 	Reconnect(info *hid.DeviceInfo)
 
 	Buttons() ButtonState
-	RawSticks(axis AxisID) [2]byte
-	Battery() int8
+	// Indexed by [left,right][x,y]
+	// Prefer use of ReadInto() for stick data
+	RawSticks() [2][2]uint16
+	Battery() (int8, bool)
 	ReadInto(out *CombinedState, includeGyro bool)
 
-	EnableIMU(status bool)
+	ChangeInputMode(mode InputMode) bool // returns false if impossible
+	EnableGyro(status bool)
 	SPIRead(addr uint32, len byte) ([]byte, error)
+	SPIWrite(addr uint32, p []byte) error
 
 	// Valid returns have alpha=255. If alpha=0 the value is not yet available.
 	CaseColor() color.RGBA
@@ -53,21 +57,20 @@ type Controller interface {
 	Close() error
 }
 
+// Output represents an OS-level event sink for a Controller object.
+// The Controller should call BeginUpdate(), then several *Update() methods, followed by FlushUpdate().
 type Output interface {
-	// The Controller should call several *Update() methods followed by Flush().
-	BeginUpdate()
+	BeginUpdate() error
 	ButtonUpdate(b ButtonID, value bool)
-	StickUpdate(axis int, value int8)
-	GyroUpdate(vals [3]GyroFrame)
-	Flush() error
+	StickUpdate(axis AxisID, value int16)
+	GyroUpdate(vals GyroFrame)
+	FlushUpdate() error
 
 	OnFrame()
 	Close() error
 }
 
-type OutputFactory interface {
-	New(isSingleJoyCon bool) (Output, error)
-}
+type OutputFactory func(t JoyConType, playerNum int) (Output, error)
 
 type Interface interface {
 	JoyConNotify
@@ -91,7 +94,8 @@ type CombinedState struct {
 	// 3 frames of 6 values
 	Gyro [3]GyroFrame
 	// [left, right][horizontal, vertical]
-	RawSticks [2][2]uint8
+	// range is -0x7FF to +0x7FF
+	AdjSticks [2][2]int16
 	Buttons   ButtonState
 	// battery is per joycon, can't be combined
 }
@@ -104,4 +108,24 @@ const (
 
 type JoyConNotify interface {
 	JoyConUpdate(jc JoyCon, flags int)
+}
+
+type InputMode int
+
+const (
+	InputIRPolling InputMode = 0
+	InputIRPollingUnused = 1
+	InputIRPollingSpecial = 2
+	InputMCUUpdate = 0x23 // not fully known
+	InputStandard = 0x30
+	InputNFC = 0x31
+	InputUnknown33 = 0x33
+	InputUnknown35 = 0x35
+	InputLazyButtons InputMode = 0x3F
+
+	InputActivePolling = 0x13F // pseudo-mode, driver only
+)
+
+func (i InputMode) NeedsEmptyRumbles() bool {
+	return i == InputActivePolling
 }
