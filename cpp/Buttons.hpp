@@ -28,6 +28,24 @@ namespace joycon {
         };
     };
 
+    /**
+     * @param data 3 bytes of packed 12-bit values
+     * @return Unpacked 12-bit values
+     */
+    inline std::pair<uint16_t, uint16_t> decode_uint12(uint8_t *const data) {
+        return std::make_pair(((uint16_t) data[0]) | ((uint16_t) (data[1] & 0xF) << 8),
+                              ((uint16_t) data[2] << 4) | ((uint16_t) (data[1] >> 4)));
+    };
+
+    /**
+     * @param data 3 bytes of packed 12-bit values
+     * @return Unpacked 12-bit values
+     */
+    inline void decode_uint12(uint8_t *const data, uint16_t &d1, uint16_t &d2) {
+        d1 = ((uint16_t) data[0]) | ((uint16_t) (data[1] & 0xF) << 8);
+        d2 = ((uint16_t) data[2] << 4) | ((uint16_t) (data[1] >> 4));
+    };
+
     struct Buttons {
         typedef uint32_t State;
 
@@ -77,7 +95,7 @@ namespace joycon {
          * Try to avoid requiring the triggers when playing sideways.
          */
 
-        const std::unordered_map <joycon::Buttons::State, std::string> NameMap = {
+        const std::unordered_map<joycon::Buttons::State, std::string> NameMap = {
                 {R_Y,      "Y"},
                 {R_X,      "X"},
                 {R_B,      "B"},
