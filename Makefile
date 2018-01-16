@@ -18,7 +18,7 @@ SRCS = $(addprefix src/, $(SRCFILES))
 HEADS = $(addprefix src/, $(HEADFILES))
 OBJS = $(SRCS:.c=.o)
 
-all: jcmapper jcdriver
+all: jcdriver
 
 format: $(SRCS) $(HEADS) switchconnect/main.c
 	clang-format -style=file -i $^
