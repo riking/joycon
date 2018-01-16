@@ -548,11 +548,11 @@ func (jc *joyconBluetooth) reader() {
 			return
 		}
 		if hidHandle == nil {
-			time.Sleep(15 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 
-		n, err := hidHandle.Read(buffer[:])
+		n, err := hidHandle.ReadTimeout(buffer[:], 4)
 		if err != nil {
 			jc.onReadError(err)
 			return

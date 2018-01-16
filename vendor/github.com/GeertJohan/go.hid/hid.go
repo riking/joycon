@@ -22,8 +22,8 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/pkg/errors"
 	"github.com/GeertJohan/cgo.wchar"
+	"github.com/pkg/errors"
 )
 
 // struct hid_device_;
@@ -112,9 +112,12 @@ func Exit() error {
 // */
 // struct hid_device_info HID_API_EXPORT * HID_API_CALL hid_enumerate(unsigned short vendor_id, unsigned short product_id);
 
-// Retrieve a list of DeviceInfo objects that match the given vendorId and productId.
-// To retrieve a list of all HID devices': use 0x0 as vendorId and productId.
-func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
+// Retrieve a list of all the HID devices attached to the system that match
+// the given vendorId and productId.
+//
+// If vendorId is set to 0, then any vendor matches. If product_id is set to
+// 0, then any product matches. Setting both to 0 will enumerate every device.
+func Enumerate(vendorId uint16, productId uint16) ([]*DeviceInfo, error) {
 	var err error
 	var first *C.hid_device_info
 
@@ -130,7 +133,7 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 	defer C.hid_free_enumeration(first)
 
 	// make DeviceInfoList to fill
-	dil := make(DeviceInfoList, 0)
+	var dil []*DeviceInfo
 
 	// loop over linked list to fill DeviceInfoList
 	for next := first; next != nil; next = next.next {
@@ -190,9 +193,10 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 // */
 // HID_API_EXPORT hid_device * HID_API_CALL hid_open(unsigned short vendor_id, unsigned short product_id, const wchar_t *serial_number);
 
-// Open HID by vendorId, productId and serialNumber.
-// SerialNumber is optional and can be empty string ("").
-// Returns a *Devica and an error.
+// Open a HID device using a vendorID, productID and optionally a serialNumber.
+// If serialNumber is the empty string, the first found matching device will be used.
+//
+// Common errors include lack of permission, or the device not being present.
 func Open(vendorId uint16, productId uint16, serialNumber string) (*Device, error) {
 	var err error
 
@@ -208,7 +212,7 @@ func Open(vendorId uint16, productId uint16, serialNumber string) (*Device, erro
 	if len(serialNumber) > 0 {
 		serialNumberWchar, err := wchar.FromGoString(serialNumber)
 		if err != nil {
-			return nil, wrapError{w: err, ctx: "Failed to convert serialNumber to wchar string"}
+			return nil, wrapError{w: err, ctx: "hid: wchar conversion failed"}
 		}
 		serialNumberWcharPtr = (*C.wchar_t)(unsafe.Pointer(serialNumberWchar.Pointer()))
 	}
@@ -217,7 +221,7 @@ func Open(vendorId uint16, productId uint16, serialNumber string) (*Device, erro
 	hidHandle, err := C.hid_open(C.ushort(vendorId), C.ushort(productId), serialNumberWcharPtr)
 
 	if hidHandle == nil {
-		return nil, wrapError{w: err, ctx: "Failed to open device"}
+		return nil, wrapError{w: err, ctx: "hid: Failed to open device"}
 	}
 
 	dev := &Device{
@@ -243,8 +247,8 @@ func Open(vendorId uint16, productId uint16, serialNumber string) (*Device, erro
 // */
 // HID_API_EXPORT hid_device * HID_API_CALL hid_open_path(const char *path);
 
-// Open hid by path.
-// Returns a *Device and an error
+// Open a HID device by its path name. The path can be determined using Enumerate,
+// or a platform-specific detection mechanism can be ued (e.g. /dev/hidraw0 on Linux).
 func OpenPath(path string) (*Device, error) {
 	// call hidInit(). hidInit() checks if actual call to hid_hidInit() is required.
 	if err := hidInit(); err != nil {
@@ -305,8 +309,25 @@ func OpenPath(path string) (*Device, error) {
 // */
 // int  HID_API_EXPORT HID_API_CALL hid_write(hid_device *device, const unsigned char *data, size_t length);
 
-// Write data to hid device.
-// Implementing the io.Writer interface with this method.
+// Write an Output report to a HID device.
+//
+// The first byte of the data must contain the report ID. For
+// devices which only support a single report, this must be set
+// to 0x0. The remaining bytes contain the report data. Since
+// the Report ID is mandatory, calls to hid_write() will always
+// contain one more byte than the report contains. For example,
+// if a hid report is 16 bytes long, 17 bytes must be passed to
+// hid_write(), the Report ID (or 0x0, for devices with a
+// single report), followed by the report data (16 bytes). In
+// this example, the length passed in would be 17.
+//
+// Write will send the data on the first OUT endpoint, if one exists.
+// If it does not, it will send the data through the Control endpoint
+// (Endpoint 0).
+//
+// While this function implements io.Writer, callers should be careful to
+// properly re-chunk written data, as many device protocols have maximum
+// lengths.
 func (dev *Device) Write(b []byte) (n int, err error) {
 	// quick return when b is empty
 	if len(b) == 0 {
@@ -344,15 +365,23 @@ func (dev *Device) Write(b []byte) (n int, err error) {
 // */
 // int HID_API_EXPORT HID_API_CALL hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds);
 
-// Read from hid device with given timeout
-func (dev *Device) ReadTimeout(b []byte, timeout int) (n int, err error) {
+// Read an Input report from the HID device with a timeout.
+//
+// Input reports are returned to the host through the INTERRUPT
+// IN endpoint. The first byte will contain the Report number
+// if the device uses numbered reports.
+//
+// On timeout, a length of 0 bytes read is returned.
+//
+// Timeout is specified in milliseconds.
+func (dev *Device) ReadTimeout(b []byte, timeoutMS int) (n int, err error) {
 	// quick return when b is empty
 	if len(b) == 0 {
 		return 0, nil
 	}
 
 	// read data from hid device and handle error
-	res := C.hid_read_timeout(dev.hidHandle, (*C.uchar)(&b[0]), C.size_t(len(b)), C.int(timeout))
+	res := C.hid_read_timeout(dev.hidHandle, (*C.uchar)(&b[0]), C.size_t(len(b)), C.int(timeoutMS))
 	resInt := int(res)
 	if resInt == -1 {
 		return 0, dev.lastError()
@@ -381,8 +410,15 @@ func (dev *Device) ReadTimeout(b []byte, timeout int) (n int, err error) {
 // */
 // int  HID_API_EXPORT HID_API_CALL hid_read(hid_device *device, unsigned char *data, size_t length);
 
-// Read data from HID
-// Implementing the io.Reader interface with this method.
+// Read an Input report from the HID device with no timeout.
+//
+// Input reports are returned to the host through the INTERRUPT
+// IN endpoint. The first byte will contain the Report number
+// if the device uses numbered reports.
+//
+// Though this implements the io.Reader interface, callers should
+// take care to provide recieve buffers of sufficient length, as
+// HID is a packet-based, rather than stream-based, protocol.
 func (dev *Device) Read(b []byte) (n int, err error) {
 	// quick return when b is empty
 	if len(b) == 0 {
@@ -466,7 +502,23 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 // */
 // int HID_API_EXPORT HID_API_CALL hid_send_feature_report(hid_device *device, const unsigned char *data, size_t length);
 
-// Send a feature report
+// Send a Feature report to the device.
+//
+// Feature reports are sent over the Control endpoint as a
+// Set_Report transfer.  The first byte of data must
+// contain the Report ID. For devices which only support a
+// single report, this must be set to 0x0. The remaining bytes
+// contain the report data. Since the Report ID is mandatory,
+// calls to Device.SendFeatureReport() will always contain one
+// more byte than the report contains. For example, if a hid
+// report is 16 bytes long, 17 bytes must be passed to
+// SendFeatureReport(): the Report ID (or 0x0, for
+// devices which do not use numbered reports), followed by the
+// report data (16 bytes). In this example, the length passed
+// in would be 17.
+//
+// This function returns the actual number of bytes written and
+// -1 on error.
 func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 	res := C.hid_send_feature_report(dev.hidHandle, (*C.uchar)(&data[0]), C.size_t(len(data)))
 	resInt := int(res)
@@ -497,7 +549,12 @@ func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 // */
 // int HID_API_EXPORT HID_API_CALL hid_get_feature_report(hid_device *device, unsigned char *data, size_t length);
 
-// Get a FeatureReport from the HID device
+// Get a feature report from the HID device.
+//
+// The receive buffer is automatically allocated based on the provided data
+// size parameter. If the device provides more data than space available,
+// the response will be truncated or may return an error. Overallocating
+// does not result in detrimental behavior.
 func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, error) {
 	reportSize := reportDataSize + 1
 	buf := make([]byte, reportSize)
@@ -521,7 +578,8 @@ func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, 
 // */
 // void HID_API_EXPORT HID_API_CALL hid_close(hid_device *device);
 
-// Close the device handle
+// Close the device. Future calls will fail, though in-progress calls may be
+// left in an indeterminate state.
 func (dev *Device) Close() {
 	C.hid_close(dev.hidHandle)
 }
@@ -667,8 +725,10 @@ func (dev *Device) lastErrorString() string {
 	return str
 }
 
-// AttemptGrab attempts to "grab" the device for exclusive access by the program, so
-// no other program sees its input. If the parameter is false, any existing grab will be released.
+// AttemptGrab is a Linux-only API that performs the EVIOCGRAB ioctl on
+// the device. This will only work on hidraw devices.
+//
+// BUG: This doesn't actually work.
 func (dev *Device) AttemptGrab(grab bool) error {
 	return errors.Errorf("NotImplemented")
 }

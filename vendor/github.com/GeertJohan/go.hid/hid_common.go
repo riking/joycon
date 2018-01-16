@@ -57,9 +57,6 @@ type DeviceInfo struct {
 	InterfaceNumber int
 }
 
-// List of DeviceInfo objects
-type DeviceInfoList []*DeviceInfo
-
 var initOnce sync.Once
 
 type wrapError struct {

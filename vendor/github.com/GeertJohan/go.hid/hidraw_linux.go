@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/jochenvg/go-udev"
@@ -81,7 +82,8 @@ func parse_uevent_info(uevent string, bus_type *int, out *DeviceInfo) error {
 			/**
 			 *        type vendor   product
 			 * HID_ID=0003:000005AC:00008242
-			 **/
+			 *
+			 */
 			n, _ := fmt.Sscanf(value, "%x:%x:%x", bus_type, &out.VendorId, &out.ProductId)
 			if n == 3 {
 				found_id = true
@@ -101,9 +103,12 @@ func parse_uevent_info(uevent string, bus_type *int, out *DeviceInfo) error {
 	return nil
 }
 
-// Retrieve a list of DeviceInfo objects that match the given vendorId and productId.
-// To retrieve a list of all HID devices': use 0x0 as vendorId and productId.
-func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
+// Retrieve a list of all the HID devices attached to the system that match
+// the given vendorID and productID.
+//
+// If vendorID is set to 0, then any vendor matches. If productID is set to
+// 0, then any product matches. Setting both to 0 will enumerate every device.
+func Enumerate(vendorId uint16, productId uint16) ([]*DeviceInfo, error) {
 	u := udev.Udev{}
 	udevEnum := u.NewEnumerate()
 	udevEnum.AddMatchSubsystem("hidraw")
@@ -112,7 +117,7 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 		return nil, err
 	}
 
-	var list DeviceInfoList
+	var list []*DeviceInfo
 
 	it.Each(func(v_ interface{}) {
 		dev := v_.(*udev.Device)
@@ -198,8 +203,18 @@ func Enumerate(vendorId uint16, productId uint16) (DeviceInfoList, error) {
 	return list, nil
 }
 
-// Open hid by path.
-// Returns a *Device and an error
+// Open a HID device using a vendorID, productID and optionally a serialNumber.
+// If serialNumber is the empty string, the first found matching device will be used.
+//
+// Common errors include lack of permission, or the device not being present.
+//
+// BUG(kyork): Linux cgo version does not implement open by serial number
+func Open(vendorId uint16, productId uint16, serialNumber string) (*Device, error) {
+	return nil, errors.Errorf("hid: open(ID, ID, serial) not implemented")
+}
+
+// Open a HID device by its path name. The path can be determined using Enumerate,
+// or a platform-specific detection mechanism can be ued (e.g. /dev/hidraw0 on Linux).
 func OpenPath(path string) (*Device, error) {
 	fd, err := unix.Open(path, unix.O_RDWR|unix.O_NONBLOCK, 0)
 	if err != nil {
@@ -209,7 +224,7 @@ func OpenPath(path string) (*Device, error) {
 	pollFd, err := unix.EpollCreate1(0)
 	if err != nil {
 		unix.Close(fd)
-		return nil, errors.Wrap(err, "epoll_create")
+		return nil, errors.Wrap(err, "hid: epoll_create")
 	}
 	err = unix.EpollCtl(pollFd, unix.EPOLL_CTL_ADD, fd, &unix.EpollEvent{
 		Events: unix.EPOLLIN | unix.EPOLLOUT,
@@ -217,7 +232,7 @@ func OpenPath(path string) (*Device, error) {
 	if err != nil {
 		unix.Close(pollFd)
 		unix.Close(fd)
-		return nil, errors.Wrap(err, "epoll_ctl")
+		return nil, errors.Wrap(err, "hid: epoll_ctl")
 	}
 
 	return &Device{
@@ -226,20 +241,44 @@ func OpenPath(path string) (*Device, error) {
 	}, nil
 }
 
+// Write an Output report to a HID device.
+//
+// The first byte of the data must contain the report ID. For
+// devices which only support a single report, this must be set
+// to 0x0. The remaining bytes contain the report data. Since
+// the Report ID is mandatory, calls to hid_write() will always
+// contain one more byte than the report contains. For example,
+// if a hid report is 16 bytes long, 17 bytes must be passed to
+// hid_write(), the Report ID (or 0x0, for devices with a
+// single report), followed by the report data (16 bytes). In
+// this example, the length passed in would be 17.
+//
+// Write will send the data on the first OUT endpoint, if one exists.
+// If it does not, it will send the data through the Control endpoint
+// (Endpoint 0).
+//
+// While this function implements io.Writer, callers should be careful to
+// properly re-chunk written data, as many device protocols have maximum
+// lengths.
 func (dev *Device) Write(p []byte) (n int, err error) {
 	if dev == nil || dev.closed {
 		return -1, os.ErrClosed
 	}
 
-	for attempts := 4; attempts > 0; attempts-- {
+	deadline := time.Now().Add(4 * time.Millisecond)
+	for time.Now().Before(deadline) {
 		n, err = unix.Write(dev.fd, p)
-		if err == unix.EAGAIN {
+		if err == unix.EINTR {
+			continue
+		} else if err == unix.EAGAIN {
 			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
 				Events: unix.EPOLLOUT,
 				Fd:     int32(dev.fd),
 			}}, 1)
-			if pErr != nil {
-				fmt.Println("poll error:", pErr)
+			if pErr == unix.EINTR {
+				continue
+			} else if pErr != nil {
+				fmt.Println("poll error, please report as a bug:", pErr)
 			}
 			continue
 		} else if err != nil {
@@ -250,20 +289,34 @@ func (dev *Device) Write(p []byte) (n int, err error) {
 	return -1, err
 }
 
-func (dev *Device) Read(p []byte) (n int, err error) {
+// Read an Input report from the HID device with a timeout.
+//
+// Input reports are returned to the host through the INTERRUPT
+// IN endpoint. The first byte will contain the Report number
+// if the device uses numbered reports.
+//
+// On timeout, a length of 0 bytes read is returned.
+//
+// Timeout is specified in milliseconds.
+func (dev *Device) ReadTimeout(p []byte, timeoutMS int) (n int, err error) {
 	if dev == nil || dev.closed {
 		return -1, os.ErrClosed
 	}
 
-	for attempts := 4; attempts > 0; attempts-- {
+	deadline := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
+	for time.Now().Before(deadline) {
 		n, err = unix.Read(dev.fd, p)
-		if err == unix.EAGAIN {
+		if err == unix.EINTR {
+			continue
+		} else if err == unix.EAGAIN {
 			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
 				Events: unix.EPOLLIN,
 				Fd:     int32(dev.fd),
 			}}, 1)
-			if pErr != nil {
-				fmt.Println("poll error:", pErr)
+			if pErr == unix.EINTR {
+				continue
+			} else if pErr != nil {
+				fmt.Println("poll error, please report as a bug:", pErr)
 			}
 			continue
 		} else if err != nil {
@@ -274,6 +327,60 @@ func (dev *Device) Read(p []byte) (n int, err error) {
 	return 0, nil
 }
 
+// Read an Input report from the HID device with no timeout.
+//
+// Input reports are returned to the host through the INTERRUPT
+// IN endpoint. The first byte will contain the Report number
+// if the device uses numbered reports.
+//
+// Though this implements the io.Reader interface, callers should
+// take care to provide recieve buffers of sufficient length, as
+// HID is a packet-based, rather than stream-based, protocol.
+func (dev *Device) Read(p []byte) (n int, err error) {
+	if dev == nil || dev.closed {
+		return -1, os.ErrClosed
+	}
+
+	for !dev.closed {
+		n, err = unix.Read(dev.fd, p)
+		if err == unix.EINTR {
+			continue
+		} else if err == unix.EAGAIN {
+			_, pErr := unix.EpollWait(dev.epoll, []unix.EpollEvent{{
+				Events: unix.EPOLLIN,
+				Fd:     int32(dev.fd),
+			}}, 1)
+			if pErr == unix.EINTR {
+				continue
+			} else if pErr != nil {
+				fmt.Println("poll error, please report as a bug:", pErr)
+			}
+			continue
+		} else if err != nil {
+			return n, &os.PathError{Err: err, Op: "read", Path: dev.serial}
+		}
+		return n, err
+	}
+	return 0, nil
+}
+
+// Send a Feature report to the device.
+//
+// Feature reports are sent over the Control endpoint as a
+// Set_Report transfer.  The first byte of data must
+// contain the Report ID. For devices which only support a
+// single report, this must be set to 0x0. The remaining bytes
+// contain the report data. Since the Report ID is mandatory,
+// calls to Device.SendFeatureReport() will always contain one
+// more byte than the report contains. For example, if a hid
+// report is 16 bytes long, 17 bytes must be passed to
+// SendFeatureReport(): the Report ID (or 0x0, for
+// devices which do not use numbered reports), followed by the
+// report data (16 bytes). In this example, the length passed
+// in would be 17.
+//
+// This function returns the actual number of bytes written and
+// -1 on error.
 func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 	if dev == nil || dev.closed {
 		return -1, os.ErrClosed
@@ -282,6 +389,7 @@ func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 	ptr := C.malloc(C.size_t(len(data)))
 	defer C.free(ptr)
 
+	// trick to get a ridiciously long byte slice - we know the length is correct
 	cBuf := (*[1 << 30]byte)(ptr)
 	copy(cBuf[:], data)
 
@@ -296,6 +404,12 @@ func (dev *Device) SendFeatureReport(data []byte) (int, error) {
 	return int(ret), nil
 }
 
+// Get a feature report from the HID device.
+//
+// The receive buffer is automatically allocated based on the provided data
+// size parameter. If the device provides more data than space available,
+// the response will be truncated or may return an error. Overallocating
+// does not result in detrimental behavior.
 func (dev *Device) GetFeatureReport(reportId byte, reportDataSize int) ([]byte, error) {
 	if dev == nil || dev.closed {
 		return nil, os.ErrClosed
@@ -337,9 +451,12 @@ func (dev *Device) SetReadWriteNonBlocking(nonblocking bool) error {
 	return nil
 }
 
+// AttemptGrab is a Linux-only API that performs the EVIOCGRAB ioctl on
+// the device. This will only work on hidraw devices.
+//
+// BUG(kyork): AttemptGrab doesn't actually work because we have a hidraw fd, not an input fd
 func (dev *Device) AttemptGrab(grab bool) error {
-	// this won't work because the fd is a hidraw fd, not a input fd
-	var param uintptr = 0
+	var param uintptr
 	if grab {
 		param = 1
 	}
@@ -355,6 +472,8 @@ func (dev *Device) AttemptGrab(grab bool) error {
 	return nil
 }
 
+// Close the device. Future calls will fail, though in-progress calls may be
+// left in an indeterminate state.
 func (dev *Device) Close() error {
 	if dev == nil || dev.closed {
 		return os.ErrClosed
@@ -369,10 +488,14 @@ func (dev *Device) Close() error {
 	return nil
 }
 
+// Get the serial number of the device.
 func (dev *Device) SerialNumberString() (string, error) {
 	return dev.serial, nil
 }
 
+// Get a string from a HID device, based on its index.
+//
+// BUG(kyork): Linux cgo version does not implement GetIndexedString.
 func (dev *Device) GetIndexedString(index int) (string, error) {
 	return "", errors.New("Not supported on Linux")
 }
