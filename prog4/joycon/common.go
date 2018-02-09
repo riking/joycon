@@ -83,6 +83,8 @@ func (_c *calibrationData) Adjust(rawStick [2]uint16) [2]int16 {
 		c = &fakeCalibrationData
 	} else if (c.xMinOff == 0) || (c.xMaxOff == 0) || (c.yMinOff == 0) || (c.yMaxOff == 0) {
 		c = &fakeCalibrationData
+	} else if (c.xCenter == 0xFFF) || (c.yCenter == 0xFFF) {
+		c = &fakeCalibrationData
 	}
 
 	var out [2]int16
