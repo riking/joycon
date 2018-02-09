@@ -17,8 +17,8 @@ func notify(jc jcpc.JoyCon, flags int, notify ...jcpc.JoyConNotify) {
 }
 
 func decodeUint12(b []byte) (uint16, uint16) {
-	d1 := uint16(b[0]) | (uint16(b[1] & 0xF) << 8)
-	d2 := uint16(b[1] >> 4) | (uint16(b[2]) << 4)
+	d1 := uint16(b[0]) | (uint16(b[1]&0xF) << 8)
+	d2 := uint16(b[1]>>4) | (uint16(b[2]) << 4)
 	return d1, d2
 }
 
@@ -81,7 +81,7 @@ func (_c *calibrationData) Adjust(rawStick [2]uint16) [2]int16 {
 	c := _c
 	if c == nil {
 		c = &fakeCalibrationData
-	} else if c.xCenter == 4095 {
+	} else if (c.xMinOff == 0) || (c.xMaxOff == 0) || (c.yMinOff == 0) || (c.yMaxOff == 0) {
 		c = &fakeCalibrationData
 	}
 

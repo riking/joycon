@@ -727,8 +727,6 @@ func (dev *Device) lastErrorString() string {
 
 // AttemptGrab is a Linux-only API that performs the EVIOCGRAB ioctl on
 // the device. This will only work on hidraw devices.
-//
-// BUG: This doesn't actually work.
 func (dev *Device) AttemptGrab(grab bool) error {
 	return errors.Errorf("NotImplemented")
 }
