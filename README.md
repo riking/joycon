@@ -1,7 +1,14 @@
 # joycon
 Joy-Con input driver for Linux
 
-The current main code, written in Go, lives in the `prog4` folder, as it was the fourth attempt at making this program.
+The current main code, written in Go, lives in the `prog4/jcdriver` folder, as it was the fourth attempt at making this program.
+
+## Compiling
+
+```
+sudo apt install libudev-dev
+go get -u github.com/riking/jcdriver || true
+```
 
 ## Basic Instructions
 
