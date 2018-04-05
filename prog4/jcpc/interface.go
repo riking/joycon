@@ -1,3 +1,5 @@
+// Package jcpc (Joy-Con PC) contains constants, interface definitions, and
+// short utility functions for the joy-con driver.
 package jcpc
 
 import (
@@ -77,6 +79,35 @@ type Interface interface {
 	RemoveController(c Controller)
 }
 
+// BluetoothManager provides an interface to the OS bluetooth stack.
+type BluetoothManager interface {
+	// Call StartDiscovery when the UI enters a "change controller
+	// order/layout" screen.
+	StartDiscovery()
+	// Call StopDiscovery when the UI exits a "change controller order/layout"
+	// screen. Paired controllers set up for auto-reconnect will still generate
+	// device connect events.
+	StopDiscovery()
+
+	// The UI code should call this after a L+R press to ensure clean
+	// auto-reconnect.
+	SavePairingInfo(mac [6]byte)
+	// The UI code must provide a way for the user to reset auto-reconnect
+	// records, which (Linux) will occur whenever the Joy-Con is connected to a
+	// different Switch.
+	DeletePairingInfo()
+
+	NotifyChannel() <-chan BluetoothDeviceNotification
+}
+
+type BluetoothDeviceNotification struct {
+	MAC       [6]byte
+	MACString string
+	// false if this is a disconnect event
+	Connected bool
+	NewDevice bool
+}
+
 /*
 gyro data notes
 
@@ -113,17 +144,16 @@ type JoyConNotify interface {
 type InputMode int
 
 const (
-	InputIRPolling InputMode = 0
-	InputIRPollingUnused = 1
-	InputIRPollingSpecial = 2
-	InputMCUUpdate = 0x23 // not fully known
-	InputStandard = 0x30
-	InputNFC = 0x31
-	InputUnknown33 = 0x33
-	InputUnknown35 = 0x35
-	InputLazyButtons InputMode = 0x3F
-
-	InputActivePolling = 0x13F // pseudo-mode, driver only
+	InputIRPolling        InputMode = 0
+	InputIRPollingUnused            = 1
+	InputIRPollingSpecial           = 2
+	InputMCUUpdate                  = 0x23 // not fully known
+	InputStandard                   = 0x30
+	InputNFC                        = 0x31
+	InputUnknown33                  = 0x33
+	InputUnknown35                  = 0x35
+	InputLazyButtons      InputMode = 0x3F
+	InputActivePolling              = 0x13F // pseudo-mode, driver only
 )
 
 func (i InputMode) NeedsEmptyRumbles() bool {
