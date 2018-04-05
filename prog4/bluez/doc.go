@@ -31,6 +31,7 @@
 package bluez
 
 import "sync"
+import "github.com/riking/joycon/prog4/jcpc"
 
 var autoconnectDeviceNames = []string{
 	"Pro Controller",
@@ -43,55 +44,3 @@ const (
 	HIDProfileShort   = 0x1124
 	HIDProfileUUIDStr = "00001124-0000-1000-8000-00805F9B34FB"
 )
-
-// JoyconAPI presents a manageable surface area for the rest of the code to
-// use.  Eventually it will be turned into an interface for multi-OS
-// functionality.
-type JoyconAPI struct {
-	mu sync.Mutex
-
-	discoveryEnabled    bool
-	InputDevicesChanged chan struct{}
-}
-
-// Request discovery of Bluetooth devices (e.g., entered the "change controller
-// config" screen).
-func (a *JoyconAPI) StartDiscovery() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	if !a.discoveryEnabled {
-		a.discoveryEnabled = true
-		// TODO request discovery...
-	}
-}
-
-// Stop automatic discovery of Bluetooth devices.
-func (a *JoyconAPI) StopDiscovery() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	if a.discoveryEnabled {
-		a.discoveryEnabled = false
-		// TODO request stop discovery...
-	}
-}
-
-// Returns whether the manager object thinks Bluetooth discovery is enabled.
-func (a *JoyconAPI) IsDiscoveryEnabled() bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.discoveryEnabled
-}
-
-// Call this when the user holds the device sync button down.
-func (a *JoyconAPI) RemoveSyncRecords() {
-	// listBluetoothDevices()
-	// for dev := devices
-	// if isJoyCon(dev)
-	// getAdapter(dev.adapter).RemoveDevice(path)
-}
-
-func (a *JoyconAPI) SaveSyncRecord(mac string) {
-	// set Trusted=true
-}
