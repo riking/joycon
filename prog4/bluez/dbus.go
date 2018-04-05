@@ -16,7 +16,8 @@ type Properties interface {
 }
 
 const (
-
+	BlueZBusName  = "org.bluez"
+	BlueZRootPath = "/org/bluez"
 	//Device1Interface the bluez interface for Device1
 	Device1Interface = "org.bluez.Device1"
 	//Adapter1Interface the bluez interface for Adapter1

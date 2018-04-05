@@ -89,6 +89,10 @@ type BluetoothManager interface {
 	// device connect events.
 	StopDiscovery()
 
+	// Check for devices already connected to the system, send notifications
+	// on NotifyChannel, and subscribe to future changes.
+	InitialScan()
+
 	// The UI code should call this after a L+R press to ensure clean
 	// auto-reconnect.
 	SavePairingInfo(mac [6]byte)
