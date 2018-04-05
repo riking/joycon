@@ -30,9 +30,6 @@
 //
 package bluez
 
-import "sync"
-import "github.com/riking/joycon/prog4/jcpc"
-
 var autoconnectDeviceNames = []string{
 	"Pro Controller",
 	"Joy-Con (L)",
@@ -41,6 +38,7 @@ var autoconnectDeviceNames = []string{
 
 // The Bluetooth profile of interest to us.
 const (
-	HIDProfileShort   = 0x1124
-	HIDProfileUUIDStr = "00001124-0000-1000-8000-00805F9B34FB"
+	HIDProfileShort    = 0x1124
+	HIDProfileUUIDStrU = "00001124-0000-1000-8000-00805F9B34FB"
+	HIDProfileUUIDStrL = "00001124-0000-1000-8000-00805f9b34fb"
 )

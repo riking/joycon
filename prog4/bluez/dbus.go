@@ -1,6 +1,5 @@
 package bluez
 
-import "github.com/godbus/dbus"
 import "github.com/godbus/dbus/introspect"
 
 //Properties dbus serializable struct

@@ -36,6 +36,7 @@ type Manager struct {
 	wantReconnect []jcpc.JoyCon
 
 	outputFactory jcpc.OutputFactory
+	btManager     jcpc.BluetoothManager
 
 	commandChan      chan string
 	attemptPairingCh chan struct{}
@@ -45,9 +46,10 @@ type Manager struct {
 	doAttemptPairing bool
 }
 
-func New(of jcpc.OutputFactory) *Manager {
+func New(of jcpc.OutputFactory, bt jcpc.BluetoothManager) *Manager {
 	m := &Manager{
 		outputFactory: of,
+		btManager:     bt,
 
 		commandChan:      make(chan string, 1),
 		attemptPairingCh: make(chan struct{}, 1),
@@ -59,15 +61,16 @@ func New(of jcpc.OutputFactory) *Manager {
 
 func (m *Manager) Run() {
 	frameTicker := time.NewTicker(16666 * time.Microsecond)
-	secondTicker := time.NewTicker(1 * time.Second)
+	btNotify := m.btManager.NotifyChannel()
 
 	go m.readStdin()
+	go m.btManager.InitialScan()
 
 	for {
 		select {
 		case <-frameTicker.C:
 			m.OnFrame()
-		case <-secondTicker.C:
+		case _ = <-btNotify:
 			m.SearchDevices()
 		case <-m.attemptPairingCh:
 			m.attemptPairing()
