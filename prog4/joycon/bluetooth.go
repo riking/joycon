@@ -437,6 +437,20 @@ func (jc *joyconBluetooth) fillInput(packet []byte) {
 	jc.mu.Unlock()
 }
 
+func (jc *joyconBluetooth) handleButtonPush(packet []byte) {
+	if jc.mode != jcpc.InputLazyButtons {
+		return
+	}
+	if jc.side == jcpc.TypeBoth {
+		// TODO: support Pro Controller
+		return
+	}
+
+	jc.mu.Lock()
+	jc.buttons = jcpc.ConvertPushReport(jc.side, packet[1:3])
+	jc.mu.Unlock()
+}
+
 func gyroDiff(prevFrame, curFrame [6]int16) [6]int16 {
 	var result [6]int16
 	for j := 0; j < 6; j++ {
@@ -524,17 +538,6 @@ func (jc *joyconBluetooth) handleSubcommandReply(_packet []byte) {
 	}
 }
 
-func (jc *joyconBluetooth) handleButtonPush(packet []byte) {
-	if jc.mode != jcpc.InputLazyButtons {
-		return
-	}
-
-	// translating the buttons is too much of a pain
-	// and requires different handling from pro controller
-	// so just queue an empty subcommand
-	jc.queueSubcommand([]byte{0})
-}
-
 func (jc *joyconBluetooth) reader() {
 	var buffer [0x100]byte
 
@@ -552,7 +555,7 @@ func (jc *joyconBluetooth) reader() {
 			continue
 		}
 
-		n, err := hidHandle.ReadTimeout(buffer[:], 4)
+		n, err := hidHandle.ReadTimeout(buffer[:], 32)
 		if err != nil {
 			jc.onReadError(err)
 			return

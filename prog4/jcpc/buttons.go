@@ -1,10 +1,13 @@
 package jcpc
 
+import "encoding/binary"
+
 type ButtonState [3]byte
 
 type ButtonID int16
 type AxisID int16
 
+// First byte of ButtonState.
 const (
 	Button_R_Y ButtonID = 0x000 + (1 << iota)
 	Button_R_X
@@ -15,6 +18,8 @@ const (
 	Button_R_R
 	Button_R_ZR
 )
+
+// Middle byte of ButtonState.
 const (
 	Button_Minus ButtonID = 0x100 + (1 << iota)
 	Button_Plus
@@ -23,8 +28,10 @@ const (
 	Button_Home
 	Button_Capture
 	Button_Unused1
-	Button_Unused2
+	Button_IsChargeGrip
 )
+
+// Last byte of ButtonState.
 const (
 	Button_L_Down ButtonID = 0x200 + (1 << iota)
 	Button_L_Up
@@ -34,6 +41,42 @@ const (
 	Button_L_SL
 	Button_L_L
 	Button_L_ZL
+)
+
+// Bits in the 0x3F "push" mode treated as a little-endian int16.  See
+// ConvertPushReport().
+const (
+	ButtonPushDown = 1 << iota
+	ButtonPushRight
+	ButtonPushLeft
+	ButtonPushUp // remember to rotate these for L and R Joy-Cons
+	ButtonPushSL
+	ButtonPushSR
+	_
+	_
+	ButtonPushMinus
+	ButtonPushPlus
+	ButtonPushLStick
+	ButtonPushRStick
+	ButtonPushHome
+	ButtonPushCapture
+	ButtonPushLR
+	ButtonPushZLZR
+)
+
+// All button combinations considered to be a L+R press or part of one
+var (
+	// Side Joy-Con
+	ButtonsSLSR_R = ButtonState{byte((Button_R_SL | Button_R_SR) & 0xFF), 0, 0}
+	ButtonsSLSR_L = ButtonState{0, 0, byte((Button_L_SL | Button_L_SR) & 0xFF)}
+	// Upright Pair
+	ButtonsRZR = ButtonState{byte((Button_R_R | Button_R_ZR) & 0xFF), 0, 0}
+	ButtonsLZL = ButtonState{0, 0, byte((Button_L_L | Button_L_ZL) & 0xFF)}
+	// Pro Controller
+	ButtonsLR   = ButtonState{byte(Button_R_R & 0xFF), 0, byte(Button_L_L & 0xFF)}
+	ButtonsZLZR = ButtonState{byte(Button_R_ZR & 0xFF), 0, byte(Button_L_ZL & 0xFF)}
+
+	ButtonsAnyLR = ButtonState{}.Union(ButtonsRZR).Union(ButtonsLZL).Union(ButtonsSLSR_L).Union(ButtonsSLSR_R)
 )
 
 var ButtonList = []ButtonID{
@@ -53,7 +96,7 @@ var ButtonList = []ButtonID{
 	Button_Home,
 	Button_Capture,
 	Button_Unused1,
-	Button_Unused2,
+	Button_IsChargeGrip,
 
 	Button_L_Down,
 	Button_L_Up,
@@ -106,30 +149,30 @@ const (
 )
 
 var buttonNameMap = map[ButtonID]string{
-	Button_R_Y:     "Y",
-	Button_R_X:     "X",
-	Button_R_B:     "B",
-	Button_R_A:     "A",
-	Button_R_SR:    "R-SR",
-	Button_R_SL:    "R-SL",
-	Button_R_R:     "R",
-	Button_R_ZR:    "ZR",
-	Button_Minus:   "-",
-	Button_Plus:    "+",
-	Button_R_Stick: "RStick",
-	Button_L_Stick: "LStick",
-	Button_Home:    "Home",
-	Button_Capture: "Capture",
-	Button_Unused1: "Unused1",
-	Button_Unused2: "Unused2",
-	Button_L_Down:  "Down",
-	Button_L_Up:    "Up",
-	Button_L_Right: "Right",
-	Button_L_Left:  "Left",
-	Button_L_SR:    "L-SR",
-	Button_L_SL:    "L-SL",
-	Button_L_L:     "L",
-	Button_L_ZL:    "ZL",
+	Button_R_Y:          "Y",
+	Button_R_X:          "X",
+	Button_R_B:          "B",
+	Button_R_A:          "A",
+	Button_R_SR:         "R-SR",
+	Button_R_SL:         "R-SL",
+	Button_R_R:          "R",
+	Button_R_ZR:         "ZR",
+	Button_Minus:        "-",
+	Button_Plus:         "+",
+	Button_R_Stick:      "RStick",
+	Button_L_Stick:      "LStick",
+	Button_Home:         "Home",
+	Button_Capture:      "Capture",
+	Button_Unused1:      "Unused1",
+	Button_IsChargeGrip: "Charging Grip",
+	Button_L_Down:       "Down",
+	Button_L_Up:         "Up",
+	Button_L_Right:      "Right",
+	Button_L_Left:       "Left",
+	Button_L_SR:         "L-SR",
+	Button_L_SL:         "L-SL",
+	Button_L_L:          "L",
+	Button_L_ZL:         "ZL",
 }
 
 func (b ButtonID) String() string {
@@ -149,12 +192,96 @@ var axisNameMap = map[AxisID]string{
 	Axis_Roll_Y:     "Roll Y",
 }
 
+// ButtonsFromSlice copies the provided slice from a standard input report into
+// a ButtonState.
 func ButtonsFromSlice(b []byte) ButtonState {
 	var result ButtonState
 	result[0] = b[0]
 	result[1] = b[1]
 	result[2] = b[2]
 	return result
+}
+
+// ConvertPushReport converts a 0x3F "push" button press report into a
+// ButtonState.  Only for Left and Right Joy-Cons (Pro Controllers use a
+// different format).
+//
+// The report ID (0x3F) should be removed from the 'buttons' slice.
+func ConvertPushReport(side JoyConType, buttons []byte) ButtonState {
+	var out ButtonState
+	var data = binary.LittleEndian.Uint16(buttons[:2])
+	if side == TypeLeft {
+		if 0 != data&ButtonPushDown {
+			out.Set(Button_L_Left, true)
+		}
+		if 0 != data&ButtonPushRight {
+			out.Set(Button_L_Down, true)
+		}
+		if 0 != data&ButtonPushLeft {
+			out.Set(Button_L_Up, true)
+		}
+		if 0 != data&ButtonPushUp {
+			out.Set(Button_L_Right, true)
+		}
+		if 0 != data&ButtonPushSL {
+			out.Set(Button_L_SL, true)
+		}
+		if 0 != data&ButtonPushSR {
+			out.Set(Button_L_SR, true)
+		}
+		if 0 != data&ButtonPushMinus {
+			out.Set(Button_Minus, true)
+		}
+		if 0 != data&ButtonPushLStick {
+			out.Set(Button_L_Stick, true)
+		}
+		if 0 != data&ButtonPushCapture {
+			out.Set(Button_Capture, true)
+		}
+		if 0 != data&ButtonPushLR {
+			out.Set(Button_L_L, true)
+		}
+		if 0 != data&ButtonPushZLZR {
+			out.Set(Button_L_ZL, true)
+		}
+	} else if side == TypeRight {
+		if 0 != data&ButtonPushDown {
+			out.Set(Button_R_A, true)
+		}
+		if 0 != data&ButtonPushRight {
+			out.Set(Button_R_X, true)
+		}
+		if 0 != data&ButtonPushLeft {
+			out.Set(Button_R_B, true)
+		}
+		if 0 != data&ButtonPushUp {
+			out.Set(Button_R_Y, true)
+		}
+		if 0 != data&ButtonPushSL {
+			out.Set(Button_R_SL, true)
+		}
+		if 0 != data&ButtonPushSR {
+			out.Set(Button_R_SR, true)
+		}
+		if 0 != data&ButtonPushPlus {
+			out.Set(Button_Plus, true)
+		}
+		if 0 != data&ButtonPushRStick {
+			out.Set(Button_R_Stick, true)
+		}
+		if 0 != data&ButtonPushHome {
+			out.Set(Button_Home, true)
+		}
+		if 0 != data&ButtonPushLR {
+			out.Set(Button_R_R, true)
+		}
+		if 0 != data&ButtonPushZLZR {
+			out.Set(Button_R_ZR, true)
+		}
+	} else {
+		panic("bad Type passed to ConvertPushReport")
+	}
+	return out
 }
 
 // Get the state of a single ButtonID.
@@ -221,4 +348,30 @@ func (b ButtonState) HasAny(mask ButtonState) bool {
 	result = result || (b[1]&mask[1]) != 0
 	result = result || (b[2]&mask[2]) != 0
 	return result
+}
+
+// Check for a L+R press.  If this might be half of a double Joy-Con, the
+// second return value (maybeDouble) will be true.
+func (b ButtonState) PairCheckSelf() (selfPair bool, maybeDouble bool) {
+	if b.HasAll(ButtonsSLSR_L) || b.HasAll(ButtonsSLSR_R) {
+		return true, false
+	}
+	if b.HasAll(ButtonsLR) || b.HasAll(ButtonsZLZR) {
+		return true, false
+	}
+	if b.HasAny(ButtonsLZL) || b.HasAny(ButtonsRZR) {
+		return false, true
+	}
+	return false, false
+}
+
+// Check for a double Joy-Con L+R press.  Make sure not to call this if either
+// of the two controllers is a Pro Controller.
+func (b ButtonState) PairCheckDouble(b2 ButtonState) bool {
+	if b.HasAny(ButtonsLZL) {
+		return b2.HasAny(ButtonsRZR)
+	} else if b.HasAny(ButtonsRZR) {
+		return b2.HasAny(ButtonsLZL)
+	}
+	return false
 }

@@ -194,7 +194,8 @@ func cmdHelp(m *Manager, argv []string) {
 
 var _ = addCommand(cmdHelp, "Display this help text.", "help", "?", "hlep")
 var _ = addCommand(cmdList, "Show the names of all Joy-Cons connected to the system.", "list", "ls")
-var _ = addCommand(cmdRecheck, "Recheck for JoyCons connected by the system.", "rescan", "recheck")
+var _ = addCommand(cmdSync, "Connect a new Joy-Con.", "sync")
+var _ = addCommand(cmdDesync, "Reset Joy-Con pairing info.", "desync")
 var _ = addCommand(cmdDisconnect, "Disconnect the specified JoyCon.", "disconnect")
 var _ = addCommand(cmdDisconnectAll, "Disconnect all JoyCons.", "disconnectall")
 var _ = addCommand(cmdSetPlayerLights, "Set the player lights on the JoyCon", "setPlayerLights")
@@ -208,8 +209,17 @@ func cmdList(m *Manager, argv []string) {
 	printConnectedJoyCons(m)
 }
 
-func cmdRecheck(m *Manager, argv []string) {
-	m.SearchDevices()
+// func cmdRecheck(m *Manager, argv []string) {
+//	m.SearchDevices()
+// }
+
+func cmdSync(m *Manager, argv []string) {
+	// TODO
+
+}
+
+func cmdDesync(m *Manager, argv []string) {
+	m.btManager.DeletePairingInfo()
 }
 
 func cmdDisconnect(m *Manager, argv []string) {
