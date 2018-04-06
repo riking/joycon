@@ -271,7 +271,8 @@ func (jc *joyconBluetooth) Shutdown() {
 	go notify(jc, jcpc.NotifyConnection, jc.ui, jc.controller)
 }
 
-func (jc *joyconBluetooth) Reconnect(dev *hid.DeviceInfo) {
+func (jc *joyconBluetooth) Reconnect(hidDeviceInfo interface{}) {
+	dev := hidDeviceInfo.(*hid.DeviceInfo)
 	jc.mu.Lock()
 	defer jc.mu.Unlock()
 

@@ -4,8 +4,6 @@ package jcpc
 
 import (
 	"image/color"
-
-	"github.com/GeertJohan/go.hid"
 )
 
 type JoyCon interface {
@@ -19,9 +17,10 @@ type JoyCon interface {
 	WantsReconnect() bool
 	// Returns true if Close() or Shutdown() have been called.
 	IsStopping() bool
-	// Ask the JoyCon to disconnect. This
+	// Ask the JoyCon to disconnect and stay disconnected.
 	Shutdown()
-	Reconnect(info *hid.DeviceInfo)
+	// Must be of type github.com/GeertJohan/go.hid#DeviceInfo
+	Reconnect(hidDeviceInfo interface{})
 
 	Buttons() ButtonState
 	// Indexed by [left,right][x,y]
