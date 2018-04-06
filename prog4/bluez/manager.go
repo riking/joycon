@@ -161,14 +161,16 @@ func (a *JoyconAPI) InitialScan() {
 }
 
 func (a *JoyconAPI) initialScan() error {
-	ispectNode, err := introspect.Call(a.busConn.Object(BlueZBusName, BlueZRootPath))
+	path := dbus.ObjectPath(BlueZRootPath)
+	obj := a.busConn.Object(BlueZBusName, path)
+	ispectNode, err := introspect.Call(obj)
 	if err != nil {
 		return errors.Wrapf(err, "introspect %s", BlueZRootPath)
 	}
 
 	var adapterList []dbus.ObjectPath
 	for _, v := range ispectNode.Children {
-		adapterList = append(adapterList, dbus.ObjectPath(v.Name))
+		adapterList = append(adapterList, joinPath(path, v.Name))
 	}
 
 	a.mu.Lock()
@@ -187,8 +189,10 @@ func (a *JoyconAPI) initialScan() error {
 
 func (a *JoyconAPI) checkAdapter(path dbus.ObjectPath) error {
 	obj := a.busConn.Object(BlueZBusName, path)
-	fmt.Println("[bluez] calling GetProperty .Address")
-	adapterAddrV, err := obj.GetProperty(Adapter1Interface + ".Address")
+	fmt.Println("[bluez] calling GetProperty .Address", obj)
+	var adapterAddrV dbus.Variant
+	err := obj.Call("org.freedesktop.DBus.Properties.Get", 0, Adapter1Interface, "Address").Store(&adapterAddrV)
+	fmt.Println("[bluez] GetProperty .Address returned")
 	if err != nil {
 		return errors.Wrap(err, "get .Address")
 	}
@@ -204,12 +208,13 @@ func (a *JoyconAPI) checkAdapter(path dbus.ObjectPath) error {
 	ispectNode, err := introspect.Call(obj)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\r[dbus] failed to check bluetooth devices: introspect %s: %v\n", path, err)
-		return
+		return err
 	}
 	fmt.Println("[bluez] introspect found", len(ispectNode.Children), "device records")
 	for _, v := range ispectNode.Children {
-		a.checkDevice(dbus.ObjectPath(v.Name))
+		a.checkDevice(joinPath(path, v.Name))
 	}
+	return nil
 }
 
 func (a *JoyconAPI) checkDevice(path dbus.ObjectPath) {
@@ -263,7 +268,7 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 			"get device info for %s", path)
 	}
 	for i := 0; i < 6; i++ {
-		by, err := strconv.ParseInt(macSplit[i], 16, 8)
+		by, err := strconv.ParseUint(macSplit[i], 16, 8)
 		if err != nil {
 			return newInfo, errors.Wrapf(err, "get device info for %s: bad MAC address", path)
 		}
@@ -282,4 +287,8 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 		}
 	}
 	return newInfo, nil
+}
+
+func joinPath(parent dbus.ObjectPath, child string) dbus.ObjectPath {
+	return dbus.ObjectPath(string(parent) + "/" + child)
 }
