@@ -28,7 +28,24 @@ type JoyconAPI struct {
 	discoveryEnabled bool
 	adapterPaths     []dbus.ObjectPath
 	devicePaths      map[dbus.ObjectPath]btDeviceInfo
+
+	setupDone         bool
+	setupChangeBuffer []*dbus.Signal
 }
+
+type dbusObjectNotify map[string]map[string]dbus.Variant
+
+// initial setup flow:
+//
+// API created
+//   connect to dbus
+//   set up signal listener
+// InitialScan()
+//   subscribe to change signals
+//     buffer actual changes
+//   call GetManagedObjects
+//   set up btDeviceInfo structs (several mutex lock-unlocks)
+//   locked: set setupDone, process buffered changes
 
 type btDeviceInfo struct {
 	Name string
@@ -150,6 +167,9 @@ func (a *JoyconAPI) savePairingInfo(macStr string) error {
 func (a *JoyconAPI) handleChangeSignals() {
 	for busSig := range a.busSignalCh {
 		fmt.Println("[bluez]", "dbus signal", busSig)
+		if busSig.Name == "org.freedesktop.DBus.ObjectManager.InterfacesAdded" {
+		} else if busSig.Name == "org.freedesktop.DBus.ObjectManager.InterfacesRemoved" {
+		}
 	}
 }
 
@@ -161,38 +181,163 @@ func (a *JoyconAPI) InitialScan() {
 }
 
 func (a *JoyconAPI) initialScan() error {
-	path := dbus.ObjectPath(BlueZRootPath)
-	obj := a.busConn.Object(BlueZBusName, path)
-	ispectNode, err := introspect.Call(obj)
-	if err != nil {
-		return errors.Wrapf(err, "introspect %s", BlueZRootPath)
+	fmt.Println("Starting initial scan")
+	// Subscribe to InterfaceAdded/InterfaceRemoved
+	busObj := a.busConn.BusObject()
+	sigCall := busObj.Go("org.freedesktop.DBus.AddMatch", 0, nil,
+		"type='signal',sender='org.bluez',interface='org.freedesktop.DBus.ObjectManager',path='/'")
+	if sigCall.Err != nil {
+		return errors.Wrap(sigCall.Err, "subscribe to updates")
+	}
+	<-sigCall.Done
+	if sigCall.Err != nil {
+		return errors.Wrap(sigCall.Err, "subscribe to updates")
+	}
+	fmt.Println("done with addmatchsignal")
+
+	// Call GetManagedObjects
+	obj := a.busConn.Object(BlueZBusName, "/")
+	call := obj.Call("org.freedesktop.DBus.ObjectManager.GetManagedObjects", 0)
+	if call.Err != nil {
+		return errors.Wrap(call.Err, "get current objects")
 	}
 
-	var adapterList []dbus.ObjectPath
-	for _, v := range ispectNode.Children {
-		adapterList = append(adapterList, joinPath(path, v.Name))
+	var managedObjectsReturn map[dbus.ObjectPath]dbusObjectNotify
+	err := call.Store(&managedObjectsReturn)
+	if err != nil {
+		return errors.Wrap(err, "get current objects")
+	}
+
+	for path, v := range managedObjectsReturn {
+		a.checkDBusNewObject(path, v)
 	}
 
 	a.mu.Lock()
-	a.adapterPaths = adapterList
+	a.setupDone = true
 	a.mu.Unlock()
 
-	fmt.Println("[bluez] adapter check: found", len(adapterList))
-	for _, v := range adapterList {
-		err = a.checkAdapter(v)
+	return nil
+	/*
+		ispectNode, err := introspect.Call(obj)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\r[bluez] failed to check bluetooth devices under %s: %v\n", v, err)
+			return errors.Wrapf(err, "introspect %s", BlueZRootPath)
 		}
+
+		var adapterList []dbus.ObjectPath
+		for _, v := range ispectNode.Children {
+			adapterList = append(adapterList, joinPath(path, v.Name))
+		}
+
+		a.mu.Lock()
+		a.adapterPaths = adapterList
+		a.mu.Unlock()
+
+		fmt.Println("[bluez] adapter check: found", len(adapterList))
+		for _, v := range adapterList {
+			err = a.checkAdapter(v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "\r[bluez] failed to check bluetooth devices under %s: %v\n", v, err)
+			}
+		}
+		return nil
+	*/
+}
+
+func (a *JoyconAPI) checkDBusNewObject(path dbus.ObjectPath, data dbusObjectNotify) error {
+	_, ok := data[Adapter1Interface]
+	if ok {
+		a.mu.Lock()
+		found := false
+		for _, v := range a.adapterPaths {
+			if v == path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			a.adapterPaths = append(a.adapterPaths, path)
+		}
+		a.mu.Unlock()
+		fmt.Println("[bluez] found adapter", path)
+	}
+	deviceData, ok := data[Device1Interface]
+	if ok {
+		fmt.Println("[bluez] found device", path, deviceData)
+		// TODO
 	}
 	return nil
 }
 
-func (a *JoyconAPI) checkAdapter(path dbus.ObjectPath) error {
+func (a *JoyconAPI) processRemoval(path dbus.ObjectPath, ifaces []string) {
+	for _, iface := range ifaces {
+		if iface == Adapter1Interface {
+			a.mu.Lock()
+			idx := -1
+			for i, v := range a.adapterPaths {
+				if v == path {
+					idx = i
+					break
+				}
+			}
+			if idx != -1 {
+				copy(a.adapterPaths[idx:], a.adapterPaths[idx+1:])
+				a.adapterPaths = a.adapterPaths[:len(a.adapterPaths)-1]
+			}
+			a.mu.Unlock()
+		}
+		if iface == Device1Interface {
+			a.mu.Lock()
+			devInfo := a.devicePaths[path]
+			if devInfo.IsJoyCon {
+				a.emitNotify(path, false, false)
+			}
+			a.mu.Unlock()
+		}
+	}
+}
+
+func (a *JoyconAPI) emitNotify(path dbus.ObjectPath, connected, newDevice bool) {
+	var notify jcpc.BluetoothDeviceNotification
+	if !parseMACPath(&notify, path) {
+		fmt.Println("[bluez] [ERR] could not parse device MAC", path)
+		return
+	}
+	notify.Connected = connected
+	notify.NewDevice = newDevice
+	a.changeNotify <- notify
+}
+
+func parseMACPath(dest *jcpc.BluetoothDeviceNotification, path dbus.ObjectPath) bool {
+	idx := strings.LastIndex(string(path), "/")
+	if idx < 0 {
+		return false
+	}
+	macSplit := strings.Split(string(path)[idx:], "_")
+	if len(macSplit) != 7 {
+		return false
+	}
+	for i := 0; i < 6; i++ {
+		by, err := strconv.ParseUint(macSplit[i+1], 16, 8)
+		if err != nil {
+			return false
+		}
+		dest.MAC[i] = byte(by)
+	}
+	dest.MACString = fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X",
+		dest.MAC[0],
+		dest.MAC[1],
+		dest.MAC[2],
+		dest.MAC[3],
+		dest.MAC[4],
+		dest.MAC[5],
+	)
+	return true
+}
+
+func (a *JoyconAPI) checkAdapter(path dbus.ObjectPath, data dbusObjectNotify) error {
 	obj := a.busConn.Object(BlueZBusName, path)
-	fmt.Println("[bluez] calling GetProperty .Address", obj)
 	var adapterAddrV dbus.Variant
 	err := obj.Call("org.freedesktop.DBus.Properties.Get", 0, Adapter1Interface, "Address").Store(&adapterAddrV)
-	fmt.Println("[bluez] GetProperty .Address returned")
 	if err != nil {
 		return errors.Wrap(err, "get .Address")
 	}
@@ -253,14 +398,33 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 		}
 	}
 
-	calls[0].Store(&newInfo.Name)
+	var err error
 	var macStr string
-	calls[1].Store(&macStr)
-	calls[2].Store(&newInfo.Paired)
-	calls[3].Store(&newInfo.Trusted)
-	calls[4].Store(&newInfo.Connected)
 	var uuids []string
-	calls[5].Store(&uuids)
+	err = calls[0].Store(&newInfo.Name)
+	if err != nil {
+		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
+	err = calls[1].Store(&macStr)
+	if err != nil {
+		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
+	err = calls[2].Store(&newInfo.Paired)
+	if err != nil {
+		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
+	err = calls[3].Store(&newInfo.Trusted)
+	if err != nil {
+		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
+	err = calls[4].Store(&newInfo.Connected)
+	if err != nil {
+		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
+	err = calls[5].Store(&uuids)
+	if err != nil {
+		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
 
 	macSplit := strings.Split(macStr, ":")
 	if len(macSplit) != 6 {
