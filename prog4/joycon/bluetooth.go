@@ -582,6 +582,7 @@ func (jc *joyconBluetooth) reader() {
 			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		case 0x3F:
 			jc.handleButtonPush(packet)
+			notify(jc, jcpc.NotifyInput, jc.ui, jc.controller)
 		default:
 			fmt.Println("[!!] Unknown INPUT packet type ", packet[0])
 			fmt.Printf("Packet %02X:\n%s", packet[0], hex.Dump(packet[1:]))
