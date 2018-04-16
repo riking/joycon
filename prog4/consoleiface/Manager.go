@@ -71,6 +71,7 @@ func (m *Manager) Run() {
 		case <-frameTicker.C:
 			m.OnFrame()
 		case _ = <-btNotify:
+			fmt.Println("[debug] btNotify, doing device search")
 			m.SearchDevices()
 		case <-m.attemptPairingCh:
 			m.attemptPairing()
@@ -344,9 +345,10 @@ func (m *Manager) JoyConUpdate(jc jcpc.JoyCon, flags int) {
 				}
 			}
 			if up.curButtons.HasAny(diff) {
-				fmt.Println("plonk")
+				fmt.Printf("Plonk! (u%d)\n", idx)
 				// make a sound on the ui?
 			}
+		} else {
 		}
 	}
 

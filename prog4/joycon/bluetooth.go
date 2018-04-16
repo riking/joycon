@@ -444,6 +444,7 @@ func (jc *joyconBluetooth) handleButtonPush(packet []byte) {
 	}
 	if jc.side == jcpc.TypeBoth {
 		// TODO: support Pro Controller
+		jc.queueSubcommand([]byte{0})
 		return
 	}
 

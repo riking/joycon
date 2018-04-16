@@ -212,71 +212,71 @@ func ConvertPushReport(side JoyConType, buttons []byte) ButtonState {
 	var data = binary.LittleEndian.Uint16(buttons[:2])
 	if side == TypeLeft {
 		if 0 != data&ButtonPushDown {
-			out.Set(Button_L_Left, true)
+			out = out.Set(Button_L_Left, true)
 		}
 		if 0 != data&ButtonPushRight {
-			out.Set(Button_L_Down, true)
+			out = out.Set(Button_L_Down, true)
 		}
 		if 0 != data&ButtonPushLeft {
-			out.Set(Button_L_Up, true)
+			out = out.Set(Button_L_Up, true)
 		}
 		if 0 != data&ButtonPushUp {
-			out.Set(Button_L_Right, true)
+			out = out.Set(Button_L_Right, true)
 		}
 		if 0 != data&ButtonPushSL {
-			out.Set(Button_L_SL, true)
+			out = out.Set(Button_L_SL, true)
 		}
 		if 0 != data&ButtonPushSR {
-			out.Set(Button_L_SR, true)
+			out = out.Set(Button_L_SR, true)
 		}
 		if 0 != data&ButtonPushMinus {
-			out.Set(Button_Minus, true)
+			out = out.Set(Button_Minus, true)
 		}
 		if 0 != data&ButtonPushLStick {
-			out.Set(Button_L_Stick, true)
+			out = out.Set(Button_L_Stick, true)
 		}
 		if 0 != data&ButtonPushCapture {
-			out.Set(Button_Capture, true)
+			out = out.Set(Button_Capture, true)
 		}
 		if 0 != data&ButtonPushLR {
-			out.Set(Button_L_L, true)
+			out = out.Set(Button_L_L, true)
 		}
 		if 0 != data&ButtonPushZLZR {
-			out.Set(Button_L_ZL, true)
+			out = out.Set(Button_L_ZL, true)
 		}
 	} else if side == TypeRight {
 		if 0 != data&ButtonPushDown {
-			out.Set(Button_R_A, true)
+			out = out.Set(Button_R_A, true)
 		}
 		if 0 != data&ButtonPushRight {
-			out.Set(Button_R_X, true)
+			out = out.Set(Button_R_X, true)
 		}
 		if 0 != data&ButtonPushLeft {
-			out.Set(Button_R_B, true)
+			out = out.Set(Button_R_B, true)
 		}
 		if 0 != data&ButtonPushUp {
-			out.Set(Button_R_Y, true)
+			out = out.Set(Button_R_Y, true)
 		}
 		if 0 != data&ButtonPushSL {
-			out.Set(Button_R_SL, true)
+			out = out.Set(Button_R_SL, true)
 		}
 		if 0 != data&ButtonPushSR {
-			out.Set(Button_R_SR, true)
+			out = out.Set(Button_R_SR, true)
 		}
 		if 0 != data&ButtonPushPlus {
-			out.Set(Button_Plus, true)
+			out = out.Set(Button_Plus, true)
 		}
 		if 0 != data&ButtonPushRStick {
-			out.Set(Button_R_Stick, true)
+			out = out.Set(Button_R_Stick, true)
 		}
 		if 0 != data&ButtonPushHome {
-			out.Set(Button_Home, true)
+			out = out.Set(Button_Home, true)
 		}
 		if 0 != data&ButtonPushLR {
-			out.Set(Button_R_R, true)
+			out = out.Set(Button_R_R, true)
 		}
 		if 0 != data&ButtonPushZLZR {
-			out.Set(Button_R_ZR, true)
+			out = out.Set(Button_R_ZR, true)
 		}
 	} else {
 		panic("bad Type passed to ConvertPushReport")

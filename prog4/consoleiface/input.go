@@ -194,8 +194,9 @@ func cmdHelp(m *Manager, argv []string) {
 
 var _ = addCommand(cmdHelp, "Display this help text.", "help", "?", "hlep")
 var _ = addCommand(cmdList, "Show the names of all Joy-Cons connected to the system.", "list", "ls")
-var _ = addCommand(cmdSync, "Connect a new Joy-Con.", "sync")
-var _ = addCommand(cmdDesync, "Reset Joy-Con pairing info.", "desync")
+var _ = addCommand(cmdSync, "Connect a new Joy-Con (turn on bluetooth discovery).", "sync")
+var _ = addCommand(cmdSyncOff, "Done connecting a new Joy-Con (turn off bluetooth discovery).", "syncoff")
+var _ = addCommand(cmdResetSync, "Reset Joy-Con pairing info.", "resetsync")
 var _ = addCommand(cmdDisconnect, "Disconnect the specified JoyCon.", "disconnect")
 var _ = addCommand(cmdDisconnectAll, "Disconnect all JoyCons.", "disconnectall")
 var _ = addCommand(cmdSetPlayerLights, "Set the player lights on the JoyCon", "setPlayerLights")
@@ -209,17 +210,25 @@ func cmdList(m *Manager, argv []string) {
 	printConnectedJoyCons(m)
 }
 
-// func cmdRecheck(m *Manager, argv []string) {
-//	m.SearchDevices()
-// }
-
 func cmdSync(m *Manager, argv []string) {
-	// TODO
-
+	go func() {
+		m.btManager.StartDiscovery()
+		fmt.Println("Searching for Bluetooth devices.")
+		fmt.Println("Hold the SYNC button on your Joy-Con to connect.")
+		fmt.Println("Remember to use the 'syncoff' command when done.")
+	}()
 }
 
-func cmdDesync(m *Manager, argv []string) {
+func cmdSyncOff(m *Manager, argv []string) {
+	go func() {
+		m.btManager.StopDiscovery()
+		fmt.Println("Stopped Bluetooth search.")
+	}()
+}
+
+func cmdResetSync(m *Manager, argv []string) {
 	m.btManager.DeletePairingInfo()
+	fmt.Println("Deleted all pairing records, joy-cons must be reconnected.")
 }
 
 func cmdDisconnect(m *Manager, argv []string) {
