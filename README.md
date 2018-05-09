@@ -7,7 +7,7 @@ The current main code, written in Go, lives in the `prog4/jcdriver` folder, as i
 
 ```
 sudo apt install libudev-dev
-go get -u github.com/riking/jcdriver || true
+go get -u github.com/riking/joycon/prog4/jcdriver || true
 ```
 
 ## Basic Instructions
