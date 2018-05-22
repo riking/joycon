@@ -71,7 +71,7 @@ type Output interface {
 	Close() error
 }
 
-type OutputFactory func(t JoyConType, playerNum int) (Output, error)
+type OutputFactory func(t JoyConType, playerNum int, remap InputRemappingOptions) (Output, error)
 
 type Interface interface {
 	JoyConNotify
@@ -161,4 +161,16 @@ const (
 
 func (i InputMode) NeedsEmptyRumbles() bool {
 	return i == InputActivePolling
+}
+
+//Options specifies Options for changing the programms behavior (for example obtained via cli-flags)
+//Currently only input remapping is implemented but could be extanded to log-levels, bluetooth pairing options etc.
+type Options struct{
+	InputRemapping InputRemappingOptions
+}
+
+//InputRemappingOptions specifies if and how Buttons or Axes should be remapped
+//currently only Axis-Inversion is implemented
+type InputRemappingOptions struct {
+	InvertedAxes []AxisID
 }

@@ -44,9 +44,11 @@ type Manager struct {
 
 	// flags to set for the main loop
 	doAttemptPairing bool
+
+	options jcpc.Options
 }
 
-func New(of jcpc.OutputFactory, bt jcpc.BluetoothManager) *Manager {
+func New(of jcpc.OutputFactory, bt jcpc.BluetoothManager, opts jcpc.Options) *Manager {
 	m := &Manager{
 		outputFactory: of,
 		btManager:     bt,
@@ -54,6 +56,7 @@ func New(of jcpc.OutputFactory, bt jcpc.BluetoothManager) *Manager {
 		commandChan:      make(chan string, 1),
 		attemptPairingCh: make(chan struct{}, 1),
 		consoleExit:      make(chan struct{}),
+		options: opts,
 	}
 
 	return m
@@ -168,7 +171,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 	if idx2 == -1 && m.unpaired[idx1].jc.Type() != jcpc.TypeBoth {
 		fmt.Println("pairing single")
 		jc := m.unpaired[idx1].jc
-		o, err := m.outputFactory(jc.Type(), pNum)
+		o, err := m.outputFactory(jc.Type(), pNum, m.options.InputRemapping)
 		if err != nil {
 			fmt.Println("[FATAL] Failed to create controller output:", err)
 			os.Exit(1)
@@ -185,7 +188,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 	} else if idx2 == -1 {
 		fmt.Println("pairing pro")
 		jc := m.unpaired[idx1].jc
-		o, err := m.outputFactory(jcpc.TypeBoth, pNum)
+		o, err := m.outputFactory(jcpc.TypeBoth, pNum, m.options.InputRemapping)
 		if err != nil {
 			fmt.Println("[FATAL] Failed to create controller output:", err)
 			os.Exit(1)
@@ -203,7 +206,7 @@ func (m *Manager) doPairing_(idx1, idx2 int) {
 		fmt.Println("pairing double")
 		jc1 := m.unpaired[idx1].jc
 		jc2 := m.unpaired[idx2].jc
-		o, err := m.outputFactory(jcpc.TypeBoth, pNum)
+		o, err := m.outputFactory(jcpc.TypeBoth, pNum, m.options.InputRemapping)
 		if err != nil {
 			fmt.Println("[FATAL] Failed to create controller output:", err)
 			os.Exit(1)
