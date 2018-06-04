@@ -13,6 +13,12 @@ cp $(go env GOBIN)/jcdriver ./jcdriver # Copy the binary out of where Go drops i
 sudo ./jcdriver # Run the driver
 ```
 
+If an old Go version is installed and it complains about `GOPATH not set`, run:
+
+    export GOPATH=$HOME/go
+
+and try again.
+
 ## Basic Instructions
 
 After starting the program as root, connect the Joy-Cons over Bluetooth. Once the program has picked them
