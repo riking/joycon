@@ -105,10 +105,10 @@ var MappingDual = ControllerMapping{
 	},
 }
 
-func RemapInputs(mappings *ControllerMapping, mods jcpc.InputRemappingOptions){
-	for _,searched := range mods.InvertedAxes{
-		for i,axis := range mappings.Axes{
-			if axis.Axis == searched{
+func RemapInputs(mappings *ControllerMapping, mods jcpc.InputRemappingOptions) {
+	for _, searched := range mods.InvertedAxes {
+		for i, axis := range mappings.Axes {
+			if axis.Axis == searched {
 				mappings.Axes[i].Invert = !axis.Invert
 			}
 		}

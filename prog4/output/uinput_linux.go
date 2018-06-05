@@ -194,9 +194,9 @@ func (o *uinput) setupOldKernel(m ControllerMapping, name string) error {
 	return nil
 }
 
-func NewUInput(m ControllerMapping, name string,remaps jcpc.InputRemappingOptions) (jcpc.Output, error) {
+func NewUInput(m ControllerMapping, name string, remaps jcpc.InputRemappingOptions) (jcpc.Output, error) {
 
-	RemapInputs(&m,remaps)
+	RemapInputs(&m, remaps)
 
 	o := &uinput{}
 

@@ -164,8 +164,7 @@ func (i InputMode) NeedsEmptyRumbles() bool {
 }
 
 //Options specifies Options for changing the programms behavior (for example obtained via cli-flags)
-//Currently only input remapping is implemented but could be extanded to log-levels, bluetooth pairing options etc.
-type Options struct{
+type Options struct {
 	InputRemapping InputRemappingOptions
 }
 

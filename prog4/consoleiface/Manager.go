@@ -56,7 +56,7 @@ func New(of jcpc.OutputFactory, bt jcpc.BluetoothManager, opts jcpc.Options) *Ma
 		commandChan:      make(chan string, 1),
 		attemptPairingCh: make(chan struct{}, 1),
 		consoleExit:      make(chan struct{}),
-		options: opts,
+		options:          opts,
 	}
 
 	return m
