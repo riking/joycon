@@ -27,6 +27,8 @@ which is then available to the rest of the system.
 
 If you want the joycons to function as a pair of controllers with analog sticks, press the SL + SR buttons to pair as a single controller.
 
+If your game needs a stick axis to be inverted, specify --invert LV (or LH, RV, RH) when running jcdriver.
+
 TODO: Interface to switch between the modes / drop controllers for re-pairing
 
 ## Limitations
@@ -50,7 +52,7 @@ If I neglect your contributions, try pinging me on Twitter (@riking27); I may ha
  - Linux: accept reconnect requests from the controllers
  - "Active scanning" mode to pick up new controllers without holding down SYNC button
  - Configuration storage - save calibration data so it doesn't need to be pulled on every connection
- - Button and **stick axis** remapping - some games want stick inverted
+ - Button remapping
  - Motion control support
     - Figure out how to work the insane system Linux has of delivering gyro data. Consider requiring use of a custom protocol.
  - Implement as a C++ library
