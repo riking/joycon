@@ -1,4 +1,4 @@
-//+build linux,!nobluez
+//+build linux,!nobluez,never
 
 package main
 
