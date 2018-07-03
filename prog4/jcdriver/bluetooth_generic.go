@@ -1,4 +1,4 @@
-//+build !linux linux,nobluez
+//+build !linux linux
 
 package main
 
@@ -11,8 +11,10 @@ import (
 
 func getBluetoothManager() (jcpc.BluetoothManager, error) {
 	d := &dummyBTManager{}
-	d.chOut = make(chan jcpc.BluetoothDeviceNotification, 10)
+	d.chOut = make(chan jcpc.BluetoothDeviceNotification, 1)
 	d.tickerOn = false
+
+	d.StartDiscovery()
 
 	return d, nil
 }
@@ -51,6 +53,8 @@ func (m *dummyBTManager) StartDiscovery() {
 
 // StopDiscovery stops the every-five-second notifications.
 func (m *dummyBTManager) StopDiscovery() {
+	return
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

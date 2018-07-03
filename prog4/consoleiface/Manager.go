@@ -74,7 +74,6 @@ func (m *Manager) Run() {
 		case <-frameTicker.C:
 			m.OnFrame()
 		case _ = <-btNotify:
-			fmt.Println("[debug] btNotify, doing device search")
 			m.SearchDevices()
 		case <-m.attemptPairingCh:
 			m.attemptPairing()
