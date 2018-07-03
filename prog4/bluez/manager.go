@@ -140,7 +140,7 @@ func (a *JoyconAPI) connectAllDevices() {
 
 	ch := make(chan *dbus.Call, len(deviceList))
 	for _, path := range deviceList {
-		a.busConn.Object(BlueZBusName, path).Go("org.bluez.Device1.ConnectProfile", 0, ch, HIDProfileUUIDStrU)
+		a.busConn.Object(BlueZBusName, path).Go("org.bluez.Device1.ConnectProfile", 0, ch, HIDProfileUUIDStr)
 	}
 	go func() {
 		for _ = range deviceList {
@@ -162,7 +162,7 @@ func (a *JoyconAPI) connectAllDevices() {
 // Same as above, but only one device. Use 'go' when calling.
 func (a *JoyconAPI) tryConnectDevice(path dbus.ObjectPath) {
 	fmt.Println("[bluez] attempting connect to", path)
-	call := a.busConn.Object(BlueZBusName, path).Call("org.bluez.Device1.ConnectProfile", 0, HIDProfileUUIDStrU)
+	call := a.busConn.Object(BlueZBusName, path).Call("org.bluez.Device1.ConnectProfile", 0, HIDProfileUUIDStr)
 	if call.Err != nil {
 		fmt.Fprintf(os.Stderr,
 			"\r[bluez] [INFO] failed to connect bluetooth device %s: %v\n",
@@ -674,7 +674,7 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 		}
 	*/
 	for _, v := range uuids {
-		if v == HIDProfileUUIDStrL || v == HIDProfileUUIDStrU {
+		if v == HIDProfileUUIDStr {
 			newInfo.IsInputDevice = true
 			break
 		}

@@ -1,4 +1,4 @@
-//+build !linux linux
+//+build !linux linux,!bluez
 
 package main
 
