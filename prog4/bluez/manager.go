@@ -47,13 +47,20 @@ type dbusObjectNotify map[string]map[string]dbus.Variant
 //   set up btDeviceInfo structs (several mutex lock-unlocks)
 //   locked: set setupDone, process buffered changes
 
-type btDeviceInfo struct {
-	Name string
-	MAC  [6]byte `json:"-"`
+// note: RSSI = recieved signal strength indicator
+// if RSSI is present, device is present
 
-	Paired        bool
-	Trusted       bool
-	Connected     bool
+type btDeviceInfo struct {
+	MAC  [6]byte `json:"-"`
+	Name string
+
+	IsPresent bool
+	RSSI      int16
+
+	Paired    bool
+	Trusted   bool
+	Connected bool
+
 	IsInputDevice bool
 	IsJoyCon      bool
 }
@@ -74,6 +81,10 @@ func New() (*JoyconAPI, error) {
 		devicePaths:  make(map[dbus.ObjectPath]btDeviceInfo),
 	}
 	go a.handleChangeSignals()
+	err = a.registerAgent()
+	if err != nil {
+		return a, err
+	}
 	return a, nil
 }
 
@@ -247,33 +258,15 @@ func (a *JoyconAPI) deletePairingInfo() error {
 
 // marks the device as Trusted
 func (a *JoyconAPI) SavePairingInfo(mac [6]byte) {
-	macStr := fmt.Sprintf("%02X_%02X_%02X_%02X_%02X_%02X",
-		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-	)
 
-	go a.savePairingInfo(macStr)
+	// do nothing?
 }
 
-func (a *JoyconAPI) savePairingInfo(macStr string) {
-	// set Trusted=true
-	var paths []dbus.ObjectPath
-	a.mu.Lock()
-	for k := range a.devicePaths {
-		if strings.HasSuffix(string(k), macStr) {
-			paths = append(paths, k)
-		}
-	}
-	a.mu.Unlock()
-	if len(paths) == 0 {
-		fmt.Fprintf(os.Stderr, "\r[bluez] failed to save bluetooth pairing info for %s: device not found\n", macStr)
-		return
-	}
-	for _, path := range paths {
-		obj := a.busConn.Object(BlueZBusName, path)
-		c := obj.Call("org.freedesktop.DBus.Properties.Set", 0, "org.bluez.Device1", "Trusted", true)
-		if c.Err != nil {
-			fmt.Fprintf(os.Stderr, "\r[bluez] failed to save bluetooth pairing info for %s: %v\n", path, c.Err)
-		}
+func (a *JoyconAPI) markTrusted(path dbus.ObjectPath) {
+	obj := a.busConn.Object(BlueZBusName, path)
+	c := obj.Call("org.freedesktop.DBus.Properties.Set", 0, "org.bluez.Device1", "Trusted", true)
+	if c.Err != nil {
+		fmt.Fprintf(os.Stderr, "\r[bluez] failed to save bluetooth pairing info for %s: %v\n", path, c.Err)
 	}
 }
 
@@ -452,8 +445,37 @@ func (a *JoyconAPI) processRemoval(path dbus.ObjectPath, ifaces []string) {
 
 func (a *JoyconAPI) checkProperties(path dbus.ObjectPath, iface string, changed map[string]dbus.Variant, invalidated []string) {
 	if iface == Device1Interface {
-		// this is wasteful but whatever
-		a.checkDevice(path)
+		checkDevice := false
+		removeDevice := false
+
+		if _, rssiAdded := changed["RSSI"]; rssiAdded {
+			checkDevice = true
+		}
+
+		rssiRemoved := false
+		for _, v := range invalidated {
+			if v == "RSSI" {
+				rssiRemoved = true
+			}
+		}
+		if rssiRemoved {
+			removeDevice = true
+		}
+		if val, ok := changed["Connected"]; ok {
+			isConnected := val.Value().(bool)
+			if isConnected {
+				checkDevice = true
+			} else {
+				removeDevice = true
+			}
+		}
+
+		// ----
+
+		if true || checkDevice || removeDevice {
+			a.checkDevice(path)
+		}
+		_ = removeDevice
 	}
 }
 
@@ -550,15 +572,25 @@ func (a *JoyconAPI) checkDevice(path dbus.ObjectPath) {
 			// definition of "new controller" -- i.e. needs L+R press -- is !Trusted
 			a.emitNotify(path, info.Connected, true)
 		}
-		if isDiscovering && prevInfo.IsJoyCon != info.IsJoyCon {
+		if isDiscovering && prevInfo.IsPresent != info.IsPresent {
 			// This is a new device
-			fmt.Println("[bluez] checkDevice: attempt pair?", path)
-			a.tryPairDevice(path)
+			if info.Paired {
+				if !info.Trusted {
+					// all paired joycons must be marked trusted
+					go a.markTrusted(path)
+				}
+				// Just completed pairing, autoconnect
+				fmt.Println("[bluez] checkDevice: found paired, doing connect", path)
+				a.tryConnectDevice(path)
+			} else {
+				fmt.Println("[bluez] checkDevice: foudn device, attempt pair", path)
+				a.tryPairDevice(path)
+			}
 		}
 		if prevInfo.Paired != info.Paired && info.Paired {
-			// Just completed pairing, autoconnect
-			fmt.Println("[bluez] checkDevice: just paired, doing connect", path)
-			a.tryConnectDevice(path)
+		}
+		if prevInfo.IsInputDevice != info.IsInputDevice && info.IsInputDevice {
+			a.emitNotify(path, true, true)
 		}
 	}
 }
@@ -576,16 +608,25 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 		obj.Go("org.freedesktop.DBus.Properties.Get", 0, nil, Device1Interface, "Connected"),
 		obj.Go("org.freedesktop.DBus.Properties.Get", 0, nil, Device1Interface, "UUIDs"),
 	}
+	rssiCall := obj.Go("org.freedesktop.DBus.Properties.Get", 0, nil, Device1Interface, "RSSI")
 	for _, c := range calls[:] {
 		<-c.Done
 		if c.Err != nil {
 			return newInfo, errors.Wrapf(c.Err, "get device info for %s", path)
 		}
 	}
+	<-rssiCall.Done
+	fmt.Printf("rssi get error type %T\n", rssiCall.Err)
+	if dbErr, ok := rssiCall.Err.(dbus.Error); ok {
+		fmt.Printf("rssi get error: %s body %T %#v\n", dbErr.Name, dbErr.Body, dbErr.Body)
+	} else if rssiCall.Err != nil {
+		return newInfo, errors.Wrapf(rssiCall.Err, "get device info for %s", path)
+	}
 
 	var err error
 	var macStr string
 	var uuids []string
+	var rssi int16
 	err = calls[0].Store(&newInfo.Name)
 	if err != nil {
 		return newInfo, errors.Wrapf(err, "read device info for %s", path)
@@ -609,6 +650,12 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 	err = calls[5].Store(&uuids)
 	if err != nil {
 		return newInfo, errors.Wrapf(err, "read device info for %s", path)
+	}
+	if rssiCall.Err == nil {
+		err = rssiCall.Store(&rssi)
+		if err != nil {
+			return newInfo, errors.Wrapf(err, "read device info for %s", path)
+		}
 	}
 
 	// do we actually need destructured MAC here
@@ -637,6 +684,9 @@ func (a *JoyconAPI) getDeviceInfo(path dbus.ObjectPath) (btDeviceInfo, error) {
 			newInfo.IsJoyCon = true
 			break
 		}
+	}
+	if rssi != 0 {
+		newInfo.IsPresent = true
 	}
 	return newInfo, nil
 }

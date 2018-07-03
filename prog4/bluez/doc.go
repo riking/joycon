@@ -38,7 +38,8 @@ var autoconnectDeviceNames = []string{
 
 // The Bluetooth profile of interest to us.
 const (
-	HIDProfileShort    = 0x1124
-	HIDProfileUUIDStrU = "00001124-0000-1000-8000-00805F9B34FB"
-	HIDProfileUUIDStrL = "00001124-0000-1000-8000-00805f9b34fb"
+	HIDProfileShort   = 0x1124
+	HIDProfileUUIDStr = "00001124-0000-1000-8000-00805f9b34fb"
+	ProfileX1UUIDStr  = "00001000-0000-1000-8000-00805f9b34fb"
+	ProfileX2UUIDStr  = "00001200-0000-1000-8000-00805f9b34fb"
 )
