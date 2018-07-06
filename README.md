@@ -3,8 +3,19 @@ Joy-Con input driver for Linux
 
 The current main code, written in Go, lives in the `prog4/jcdriver` folder, as it was the fourth attempt at making this program.
 
-## Compiling
+## Basic Instructions (Linux/OSX)
 
+### Compiling
+#### OSX
+download and install the latest go binary from [golang.org](https://golang.org/dl/)
+```
+brew install git
+
+go get -u github.com/riking/joycon/prog4/jcdriver # Download and build the program
+cp $(go env GOBIN)/jcdriver ./jcdriver # Copy the binary out of where Go drops it
+sudo ./jcdriver # Run the driver
+```
+#### Linux
 ```
 sudo apt install libudev-dev go git
 
@@ -19,7 +30,7 @@ If an old Go version is installed and it complains about `GOPATH not set`, run:
 
 and try again.
 
-## Basic Instructions
+### Running
 
 After starting the program as root, connect the Joy-Cons over Bluetooth. Once the program has picked them
 up, the player lights will begin flashing. Press L+R on the joycons to "pair" them up as a single controller device,
