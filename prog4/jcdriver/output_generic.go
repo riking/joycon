@@ -8,7 +8,7 @@ import (
 )
 
 func getOutputFactory() jcpc.OutputFactory {
-	return func(t jcpc.JoyConType, playerNum int) (jcpc.Output, error) {
+	return func(t jcpc.JoyConType, playerNum int, remap InputRemappingOptions) (jcpc.Output, error) {
 		return output.NewConsole(t, playerNum)
 	}
 }
