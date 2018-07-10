@@ -9,7 +9,10 @@ The current main code, written in Go, lives in the `prog4/jcdriver` folder, as i
 #### OSX
 download and install the latest go binary from [golang.org](https://golang.org/dl/)
 ```
-brew install git
+xcode-select --install
+# Optionally (but encouraged), you can follow the above with
+brew install git 
+# this installs git to /usr/local/bin/git and will likely be a more recent version than the one installed by apple
 
 go get -u github.com/riking/joycon/prog4/jcdriver # Download and build the program
 cp $(go env GOBIN)/jcdriver ./jcdriver # Copy the binary out of where Go drops it
